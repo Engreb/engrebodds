@@ -3,6 +3,8 @@
 from collections.abc import Callable
 
 from engrebodds_ingest.config import Settings
+from engrebodds_ingest.jobs import audit
 
-# Filled in as jobs are built (audit, sync_reference, sync_fixtures, ...).
-JOBS: dict[str, Callable[[Settings], None]] = {}
+JOBS: dict[str, Callable[[Settings], None]] = {
+    "audit": audit.run,
+}
