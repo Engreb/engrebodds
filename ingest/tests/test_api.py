@@ -1,11 +1,11 @@
 import httpx
 import pytest
 
-from engrebodds_ingest.api import ApiError, ApiFootball
+from engrebodds_ingest.api import ApiError, ApiFootball, QuotaExhausted
 
 
-def client(handler):
-    return ApiFootball("test-key", transport=httpx.MockTransport(handler))
+def client(handler, **kw):
+    return ApiFootball("test-key", transport=httpx.MockTransport(handler), **kw)
 
 
 def test_sends_key_and_tracks_quota():
@@ -48,3 +48,41 @@ def test_waits_on_rate_limit(monkeypatch):
 
     assert client(handler).get("/odds", fixture=1)["response"] == ["ok"]
     assert len(calls) == 2 and slept == [61]
+
+
+def test_get_all_follows_pages():
+    def handler(req):
+        page = int(req.url.params.get("page", 1))
+        assert req.url.params["date"] == "2026-10-22"
+        return httpx.Response(200, json={"errors": [], "paging": {"current": page, "total": 3}, "response": [page]})
+
+    api = client(handler)
+    assert api.get_all("/odds", date="2026-10-22") == [1, 2, 3]
+    assert api.requests_made == 3
+
+
+def test_quota_floor_stops_batch_jobs():
+    def handler(req):
+        return httpx.Response(200, json={"errors": [], "response": []},
+                              headers={"x-ratelimit-requests-remaining": "400"})
+
+    api = client(handler, quota_floor=500)
+    api.get("/status")                      # first call learns the quota
+    with pytest.raises(QuotaExhausted):
+        api.get("/fixtures")
+    assert api.requests_made == 1
+
+
+def test_pauses_when_minute_allowance_used(monkeypatch):
+    slept = []
+    monkeypatch.setattr("engrebodds_ingest.api.time.sleep", slept.append)
+    remaining = iter(["0", "9"])
+
+    def handler(req):
+        return httpx.Response(200, json={"errors": [], "response": []},
+                              headers={"x-ratelimit-remaining": next(remaining)})
+
+    api = client(handler)
+    api.get("/a")
+    api.get("/b")
+    assert slept == [61]

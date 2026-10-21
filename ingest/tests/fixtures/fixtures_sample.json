@@ -1,0 +1,361 @@
+{
+ "get": "fixtures",
+ "paging": {
+  "current": 1,
+  "total": 1
+ },
+ "errors": [],
+ "results": 5,
+ "response": [
+  {
+   "fixture": {
+    "id": 1645195,
+    "referee": null,
+    "timezone": "UTC",
+    "date": "2026-10-20T08:00:00+00:00",
+    "timestamp": 1792483200,
+    "periods": {
+     "first": 1792483200,
+     "second": 1792486800
+    },
+    "venue": {
+     "id": null,
+     "name": null,
+     "city": null
+    },
+    "status": {
+     "long": "Match Finished",
+     "short": "AET",
+     "elapsed": 120,
+     "extra": null
+    }
+   },
+   "league": {
+    "id": 298,
+    "name": "FA Cup",
+    "country": "Thailand",
+    "logo": "https://media.api-sports.io/football/leagues/298.png",
+    "flag": "https://media.api-sports.io/flags/th.svg",
+    "season": 2026,
+    "round": "Round of 64",
+    "standings": false
+   },
+   "teams": {
+    "home": {
+     "id": 27002,
+     "name": "See Khwae City",
+     "logo": "https://media.api-sports.io/football/teams/27002.png",
+     "winner": false
+    },
+    "away": {
+     "id": 27279,
+     "name": "Udon Banjan United",
+     "logo": "https://media.api-sports.io/football/teams/27279.png",
+     "winner": true
+    }
+   },
+   "goals": {
+    "home": 1,
+    "away": 2
+   },
+   "score": {
+    "halftime": {
+     "home": 1,
+     "away": 1
+    },
+    "fulltime": {
+     "home": 1,
+     "away": 1
+    },
+    "extratime": {
+     "home": 0,
+     "away": 1
+    },
+    "penalty": {
+     "home": null,
+     "away": null
+    }
+   }
+  },
+  {
+   "fixture": {
+    "id": 1646585,
+    "referee": null,
+    "timezone": "UTC",
+    "date": "2026-10-20T18:45:00+00:00",
+    "timestamp": 1792521900,
+    "periods": {
+     "first": 1792521900,
+     "second": 1792525500
+    },
+    "venue": {
+     "id": null,
+     "name": "Flamingo Park",
+     "city": "Chislehurst"
+    },
+    "status": {
+     "long": "Match Finished",
+     "short": "PEN",
+     "elapsed": 120,
+     "extra": null
+    }
+   },
+   "league": {
+    "id": 45,
+    "name": "FA Cup",
+    "country": "England",
+    "logo": "https://media.api-sports.io/football/leagues/45.png",
+    "flag": "https://media.api-sports.io/flags/gb-eng.svg",
+    "season": 2026,
+    "round": "4th Round Qualifying",
+    "standings": false
+   },
+   "teams": {
+    "home": {
+     "id": 7711,
+     "name": "Cray Wanderers",
+     "logo": "https://media.api-sports.io/football/teams/7711.png",
+     "winner": true
+    },
+    "away": {
+     "id": 7616,
+     "name": "Bedford Town",
+     "logo": "https://media.api-sports.io/football/teams/7616.png",
+     "winner": false
+    }
+   },
+   "goals": {
+    "home": 2,
+    "away": 2
+   },
+   "score": {
+    "halftime": {
+     "home": 1,
+     "away": 1
+    },
+    "fulltime": {
+     "home": 1,
+     "away": 1
+    },
+    "extratime": {
+     "home": 1,
+     "away": 1
+    },
+    "penalty": {
+     "home": 4,
+     "away": 3
+    }
+   }
+  },
+  {
+   "fixture": {
+    "id": 1639281,
+    "referee": null,
+    "timezone": "UTC",
+    "date": "2026-10-20T18:45:00+00:00",
+    "timestamp": 1792521900,
+    "periods": {
+     "first": null,
+     "second": null
+    },
+    "venue": {
+     "id": null,
+     "name": null,
+     "city": null
+    },
+    "status": {
+     "long": "Match Finished",
+     "short": "PEN",
+     "elapsed": 120,
+     "extra": null
+    }
+   },
+   "league": {
+    "id": 559,
+    "name": "League Cup",
+    "country": "Northern-Ireland",
+    "logo": "https://media.api-sports.io/football/leagues/559.png",
+    "flag": "https://media.api-sports.io/flags/gb-nir.svg",
+    "season": 2026,
+    "round": "Round of 32",
+    "standings": false
+   },
+   "teams": {
+    "home": {
+     "id": 17241,
+     "name": "Rathfriland",
+     "logo": "https://media.api-sports.io/football/teams/17241.png",
+     "winner": true
+    },
+    "away": {
+     "id": 5338,
+     "name": "Ards",
+     "logo": "https://media.api-sports.io/football/teams/5338.png",
+     "winner": false
+    }
+   },
+   "goals": {
+    "home": 1,
+    "away": 0
+   },
+   "score": {
+    "halftime": {
+     "home": null,
+     "away": null
+    },
+    "fulltime": {
+     "home": 1,
+     "away": 0
+    },
+    "extratime": {
+     "home": 0,
+     "away": 0
+    },
+    "penalty": {
+     "home": null,
+     "away": null
+    }
+   }
+  },
+  {
+   "fixture": {
+    "id": 1644171,
+    "referee": null,
+    "timezone": "UTC",
+    "date": "2026-10-21T12:00:00+00:00",
+    "timestamp": 1792584000,
+    "periods": {
+     "first": 1792584000,
+     "second": 1792587600
+    },
+    "venue": {
+     "id": null,
+     "name": null,
+     "city": null
+    },
+    "status": {
+     "long": "Match Finished",
+     "short": "FT",
+     "elapsed": 90,
+     "extra": 3
+    }
+   },
+   "league": {
+    "id": 12,
+    "name": "CAF Champions League",
+    "country": "World",
+    "logo": "https://media.api-sports.io/football/leagues/12.png",
+    "flag": null,
+    "season": 2026,
+    "round": "2nd Preliminary Round",
+    "standings": false
+   },
+   "teams": {
+    "home": {
+     "id": 19116,
+     "name": "15 de Agosto",
+     "logo": "https://media.api-sports.io/football/teams/19116.png",
+     "winner": false
+    },
+    "away": {
+     "id": 6432,
+     "name": "Simba",
+     "logo": "https://media.api-sports.io/football/teams/6432.png",
+     "winner": true
+    }
+   },
+   "goals": {
+    "home": 1,
+    "away": 6
+   },
+   "score": {
+    "halftime": {
+     "home": 0,
+     "away": 1
+    },
+    "fulltime": {
+     "home": 1,
+     "away": 6
+    },
+    "extratime": {
+     "home": null,
+     "away": null
+    },
+    "penalty": {
+     "home": null,
+     "away": null
+    }
+   }
+  },
+  {
+   "fixture": {
+    "id": 1636215,
+    "referee": null,
+    "timezone": "UTC",
+    "date": "2026-10-22T16:45:00+00:00",
+    "timestamp": 1792687500,
+    "periods": {
+     "first": null,
+     "second": null
+    },
+    "venue": {
+     "id": 121,
+     "name": "Vazgen Sargsyan Republican Stadium",
+     "city": "Yerevan"
+    },
+    "status": {
+     "long": "Not Started",
+     "short": "NS",
+     "elapsed": null,
+     "extra": null
+    }
+   },
+   "league": {
+    "id": 3,
+    "name": "UEFA Europa League",
+    "country": "World",
+    "logo": "https://media.api-sports.io/football/leagues/3.png",
+    "flag": null,
+    "season": 2026,
+    "round": "League Stage - 3",
+    "standings": true
+   },
+   "teams": {
+    "home": {
+     "id": 3683,
+     "name": "Ararat-Armenia",
+     "logo": "https://media.api-sports.io/football/teams/3683.png",
+     "winner": null
+    },
+    "away": {
+     "id": 201,
+     "name": "AZ Alkmaar",
+     "logo": "https://media.api-sports.io/football/teams/201.png",
+     "winner": null
+    }
+   },
+   "goals": {
+    "home": null,
+    "away": null
+   },
+   "score": {
+    "halftime": {
+     "home": null,
+     "away": null
+    },
+    "fulltime": {
+     "home": null,
+     "away": null
+    },
+    "extratime": {
+     "home": null,
+     "away": null
+    },
+    "penalty": {
+     "home": null,
+     "away": null
+    }
+   }
+  }
+ ]
+}

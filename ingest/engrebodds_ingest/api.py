@@ -1,7 +1,4 @@
-"""Minimal API-Football v3 client: auth, retries, quota tracking.
-
-Pagination and the quota floor for batch jobs arrive in step 4.
-"""
+"""API-Football v3 client: auth, retries, rate limits, pagination and a daily quota floor."""
 
 import time
 
@@ -24,6 +21,10 @@ class ApiError(Exception):
         self.errors = errors
 
 
+class QuotaExhausted(Exception):
+    """The daily quota fell below the floor kept free for live jobs."""
+
+
 def _retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.TransportError):
         return True
@@ -33,7 +34,11 @@ def _retryable(exc: BaseException) -> bool:
 
 
 class ApiFootball:
-    def __init__(self, api_key: str, *, transport: httpx.BaseTransport | None = None):
+    """quota_floor: refuse to make a request while fewer than this many daily requests remain.
+    Live jobs use 0; batch jobs (backfill) use Settings.quota_floor so they can't starve live jobs.
+    """
+
+    def __init__(self, api_key: str, *, quota_floor: int = 0, transport: httpx.BaseTransport | None = None):
         if not api_key:
             raise ValueError("API_FOOTBALL_KEY is not set (see .env.example)")
         self._http = httpx.Client(
@@ -42,8 +47,10 @@ class ApiFootball:
             timeout=30,
             transport=transport,
         )
+        self.quota_floor = quota_floor
         self.requests_made = 0
-        self.quota_remaining: int | None = None
+        self.quota_remaining: int | None = None    # daily
+        self.minute_remaining: int | None = None   # per minute
 
     def get(self, endpoint: str, **params) -> dict:
         """GET an endpoint and return the full JSON body. Raises ApiError on body errors.
@@ -59,6 +66,15 @@ class ApiFootball:
                 time.sleep(RATE_LIMIT_WAIT_S)
         raise AssertionError("unreachable")
 
+    def get_all(self, endpoint: str, **params) -> list:
+        """Follow `paging` and return every page's `response` items concatenated."""
+        body = self.get(endpoint, **params)
+        items = list(body["response"])
+        total = (body.get("paging") or {}).get("total", 1)
+        for page in range(2, total + 1):
+            items.extend(self.get(endpoint, **params, page=page)["response"])
+        return items
+
     @retry(
         retry=retry_if_exception(_retryable),
         stop=stop_after_attempt(4),
@@ -66,11 +82,20 @@ class ApiFootball:
         reraise=True,
     )
     def _get_once(self, endpoint: str, params: dict) -> dict:
+        if self.quota_remaining is not None and self.quota_remaining < self.quota_floor:
+            raise QuotaExhausted(f"{self.quota_remaining} requests left today, floor is {self.quota_floor}")
+        if self.minute_remaining == 0:
+            time.sleep(RATE_LIMIT_WAIT_S)
+            self.minute_remaining = None
+
         resp = self._http.get(endpoint, params=params)
         self.requests_made += 1
-        remaining = resp.headers.get("x-ratelimit-requests-remaining")
-        if remaining is not None:
-            self.quota_remaining = int(remaining)
+        daily = resp.headers.get("x-ratelimit-requests-remaining")
+        if daily is not None:
+            self.quota_remaining = int(daily)
+        minute = resp.headers.get("x-ratelimit-remaining")
+        if minute is not None:
+            self.minute_remaining = int(minute)
         resp.raise_for_status()
         body = resp.json()
         # "errors" is [] when fine, or a dict like {"plan": "..."} / {"token": "..."}.
