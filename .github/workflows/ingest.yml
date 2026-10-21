@@ -1,0 +1,77 @@
+# Scheduled ingestion. Times are UTC (WAT = UTC+1).
+#
+# Budget: private repos get 2,000 free Actions minutes a month and each run bills at least a minute.
+# The live run every 30 minutes (~1,440 min) plus the others (~250 min) stays inside that.
+# Every 15 minutes would need GitHub Pro (3,000 min).
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   API_FOOTBALL_KEY   API-Football key (Pro plan)
+#   DATABASE_URL       Supabase *session pooler* connection string (GitHub runners have no IPv6,
+#                      so the direct db.<ref>.supabase.co address won't connect)
+
+name: Ingest
+
+on:
+  schedule:
+    - cron: "0,30 * * * *"        # live: results, grading, odds thinning, missing statistics
+    - cron: "20 3,15 * * *"       # fixtures, yesterday to 3 days ahead
+    - cron: "5 5,10,14,18 * * *"  # odds for today and tomorrow
+    - cron: "40 6 * * *"          # league tables
+    - cron: "50 2 * * 1"          # leagues, seasons and tiers (Mondays)
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Jobs to run, space-separated (e.g. sync_fixtures sync_odds)"
+        required: true
+        default: "sync_results sync_stats"
+
+# One run per schedule at a time; different schedules may overlap (their upserts don't conflict).
+concurrency:
+  group: ingest-${{ github.event.schedule || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      API_QUOTA_FLOOR: "500"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: ingest/pyproject.toml
+
+      - run: pip install -e ./ingest
+
+      - name: Pick jobs for this schedule
+        id: pick
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL: ${{ inputs.jobs }}
+        run: |
+          case "$SCHEDULE" in
+            "0,30 * * * *")        jobs="sync_results sync_stats" ;;
+            "20 3,15 * * *")       jobs="sync_fixtures" ;;
+            "5 5,10,14,18 * * *")  jobs="sync_odds" ;;
+            "40 6 * * *")          jobs="sync_standings" ;;
+            "50 2 * * 1")          jobs="sync_reference" ;;
+            *)                     jobs="$MANUAL" ;;
+          esac
+          echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+
+      # Run every job even if an earlier one fails, then fail the workflow so GitHub emails an alert.
+      - name: Run
+        env:
+          JOBS: ${{ steps.pick.outputs.jobs }}
+        run: |
+          failed=0
+          for job in $JOBS; do
+            python -m engrebodds_ingest "$job" || failed=1
+          done
+          exit $failed
