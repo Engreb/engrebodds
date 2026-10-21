@@ -18,7 +18,7 @@ insert into public.tip_legs (tip_id, leg_no, market_code, selection) select id, 
 update public.tips set locks_at = now() - interval '1 minute' where confidence = 3;
 
 insert into public.predictions (fixture_id, model_version, p_home, p_draw, p_away)
-select id, 'test', 0.5, 0.3, 0.2 from public.fixtures;
+select id, 'test', 0.5, 0.3, 0.2 from public.fixtures where api_fixture_id in (990001, 990002);
 insert into public.ingestion_runs (job) values ('test');
 
 set local role anon;
@@ -27,7 +27,8 @@ select is((select count(*) from public.leagues where is_pinned), 7::bigint, 'lea
 select is((select string_agg(confidence::int::text, ',' order by confidence) from public.tips), '1,3',
           'anon sees the free tip and the locked tip, not the open premium tip');
 select is((select count(*) from public.tip_legs), 2::bigint, 'legs follow their tip''s visibility');
-select is((select count(*) from public.predictions), 1::bigint,
+select is((select count(*) from public.predictions p join public.fixtures f on f.id = p.fixture_id
+            where f.api_fixture_id in (990001, 990002)), 1::bigint,
           'predictions only for the fixture with a free tip (fixture 2 has not reached its lock)');
 select is((select count(*) from public.ingestion_runs), 0::bigint, 'ingestion log is hidden');
 select is((select count(*) from public.track_record_summary), 0::bigint, 'summary view respects RLS (nothing graded)');
