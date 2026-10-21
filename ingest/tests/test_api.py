@@ -86,3 +86,17 @@ def test_pauses_when_minute_allowance_used(monkeypatch):
     api.get("/a")
     api.get("/b")
     assert slept == [61]
+
+
+def test_http_429_waits_out_the_minute(monkeypatch):
+    slept, calls = [], []
+    monkeypatch.setattr("engrebodds_ingest.api.time.sleep", slept.append)
+
+    def handler(req):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json={"errors": [], "response": ["ok"]})
+
+    assert client(handler).get("/fixtures/statistics", fixture=1)["response"] == ["ok"]
+    assert slept == [61]

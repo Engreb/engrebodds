@@ -91,16 +91,29 @@ def _price(odd) -> Decimal | None:
     return price if price > 1 else None
 
 
-def odds_rows(item: dict, api_bookmaker_ids: set[int]) -> list[OddsRow]:
-    """One element of an /odds response -> rows for the bookmakers we store and the markets we know."""
+# Lean odds policy (agreed 22 Oct 2026): the displayed bookmaker gets every market we know;
+# the other stored bookmakers only these.
+MAIN_MARKETS = frozenset({"1X2", "DC", "OU", "BTTS"})
+
+# api_bookmaker_id -> markets to keep (None = all known markets).
+OddsPolicy = dict[int, frozenset[str] | None]
+
+
+def odds_policy(display_api_id: int, other_api_ids: set[int]) -> OddsPolicy:
+    return {display_api_id: None} | {i: MAIN_MARKETS for i in other_api_ids if i != display_api_id}
+
+
+def odds_rows(item: dict, policy: OddsPolicy) -> list[OddsRow]:
+    """One element of an /odds response -> rows for the bookmakers and markets the policy keeps."""
     fixture_id = item["fixture"]["id"]
     rows: dict[tuple, OddsRow] = {}
     for bk in item["bookmakers"]:
-        if bk["id"] not in api_bookmaker_ids:
+        if bk["id"] not in policy:
             continue
+        allowed = policy[bk["id"]]
         for bet in bk["bets"]:
             mapping = BETS.get(bet["id"])
-            if not mapping:
+            if not mapping or (allowed is not None and mapping[0] not in allowed):
                 continue
             market, parse = mapping
             for v in bet["values"]:

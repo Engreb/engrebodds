@@ -22,6 +22,11 @@ create table public.fixtures (
   away_pen          smallint,
   finished_at       timestamptz,
   stats_fetched_at  timestamptz,
+  odds_thinned_at   timestamptz,
+  -- A score that doesn't add up (e.g. "PEN" with no penalty score). Tips on the fixture stay pending
+  -- until someone checks it, corrects the score and sets manual_score so the sync stops overwriting it.
+  score_issue       text,
+  manual_score      boolean not null default false,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
   check (home_team_id <> away_team_id)

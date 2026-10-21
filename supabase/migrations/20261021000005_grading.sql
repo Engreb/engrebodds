@@ -6,6 +6,7 @@
 --   * CANC, ABD, AWD, WO: void.
 --   * Not played (PST, SUSP, INT, TBD, still NS ...): pending, then void 48h after the published kick-off.
 --   * Played, but moved more than 48h from the published kick-off: void.
+--   * Played, but the score is flagged as inconsistent (score_issue): pending until checked by hand.
 --   * Played, but the numbers are missing (e.g. statistics not fetched): pending, then void after 72h.
 --   * Over/under landing exactly on a whole line: void (push).
 -- Tips: lost if any leg lost; otherwise pending if any leg pending; otherwise void if any leg void
@@ -50,6 +51,10 @@ begin
 
   if f.kickoff_at > p_tip_kickoff + interval '48 hours' then
     return 'void';
+  end if;
+
+  if f.score_issue is not null then
+    return 'pending';
   end if;
 
   if m.stat = 'goals' then

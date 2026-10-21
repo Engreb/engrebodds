@@ -5,11 +5,12 @@ from pathlib import Path
 import pytest
 
 from engrebodds_ingest.normalise import (
-    BETS, fixture_issues, fixture_row, odds_rows, team_stats_rows,
+    BETS, MAIN_MARKETS, fixture_issues, fixture_row, odds_policy, odds_rows, team_stats_rows,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
 STORED = {8, 11, 4}   # Bet365, 1xBet, Pinnacle
+POLICY = odds_policy(8, {11, 4})
 
 
 def load(name):
@@ -18,7 +19,7 @@ def load(name):
 
 @pytest.fixture(scope="module")
 def europa_odds():
-    return odds_rows(load("odds_europa_league.json")["response"][0], STORED)
+    return odds_rows(load("odds_europa_league.json")["response"][0], POLICY)
 
 
 def find(rows, bookmaker, market, selection, line=None):
@@ -40,6 +41,14 @@ def test_result_and_goals_markets(europa_odds):
     assert find(europa_odds, 8, "OU", "U", 1.5) == Decimal("5.00")
     assert find(europa_odds, 8, "TEAM_OU", "HO", 1.5) == Decimal("3.50")
     assert find(europa_odds, 8, "CORNERS_OU", "O", 9.5) == Decimal("1.83")
+
+
+def test_lean_policy(europa_odds):
+    # Bet365 keeps every known market; 1xBet and Pinnacle only the main ones (no correct score).
+    assert {r.market_code for r in europa_odds if r.api_bookmaker_id == 8} > MAIN_MARKETS | {"CS", "CORNERS_OU"}
+    for bk in (11, 4):
+        assert {r.market_code for r in europa_odds if r.api_bookmaker_id == bk} <= MAIN_MARKETS
+    assert find(europa_odds, 4, "1X2", "1") > 1
 
 
 def test_correct_score_and_clean_sheet(europa_odds):
@@ -73,7 +82,7 @@ def test_unmapped_bets_and_quarter_lines_skipped():
         {"id": 5, "name": "Goals Over/Under", "values": [
             {"value": "Over 2.25", "odd": "1.9"}, {"value": "Over 3", "odd": "2.4"}, {"value": "Over 2.5", "odd": "1.0"}]},
     ]}]}
-    rows = odds_rows(item, {8})
+    rows = odds_rows(item, {8: None})
     assert [(r.market_code, r.line, r.price) for r in rows] == [("OU", Decimal("3"), Decimal("2.4"))]
 
 

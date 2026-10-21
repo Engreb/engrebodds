@@ -80,6 +80,7 @@ create table public.ingestion_runs (
   requests_used    integer not null default 0,
   quota_remaining  integer,
   rows_written     integer not null default 0,
+  notes            jsonb not null default '[]'::jsonb,   -- warnings, e.g. fixtures with inconsistent scores
   error            text
 );
 create index ingestion_runs_job_idx on public.ingestion_runs (job, started_at desc);

@@ -1,7 +1,7 @@
 -- settle_selection: every market rule and every status path.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(27);
 
 insert into public.teams (api_team_id, name) values (900001, 'Home FC'), (900002, 'Away FC');
 
@@ -66,6 +66,9 @@ select is(pg_temp.s('1X2', 'X', null, 24, -72), 'void', 'played more than 48h af
 
 update public.fixtures set status = '2H' where api_fixture_id = 990001;
 select is(pg_temp.s('1X2', 'X', null, 1), 'pending', 'in play: pending');
+
+update public.fixtures set status = 'FT', score_issue = 'PEN without a penalty score' where api_fixture_id = 990001;
+select is(pg_temp.s('1X2', 'X'), 'pending', 'flagged score: held for a manual check, not graded');
 
 select * from finish();
 rollback;

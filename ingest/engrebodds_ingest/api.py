@@ -7,7 +7,8 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 
 BASE_URL = "https://v3.football.api-sports.io"
 
-# Per-minute limit (10/min on the free plan). The API reports it as a body error, not HTTP 429.
+# Per-minute limit (10/min on the free plan). The API reports it as a body error or as HTTP 429;
+# both wait out the minute, since a short exponential backoff isn't enough.
 RATE_LIMIT_WAIT_S = 61
 RATE_LIMIT_RETRIES = 3
 
@@ -28,9 +29,7 @@ class QuotaExhausted(Exception):
 def _retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.TransportError):
         return True
-    return isinstance(exc, httpx.HTTPStatusError) and (
-        exc.response.status_code == 429 or exc.response.status_code >= 500
-    )
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
 
 
 class ApiFootball:
@@ -66,11 +65,13 @@ class ApiFootball:
                 time.sleep(RATE_LIMIT_WAIT_S)
         raise AssertionError("unreachable")
 
-    def get_all(self, endpoint: str, **params) -> list:
-        """Follow `paging` and return every page's `response` items concatenated."""
+    def get_all(self, endpoint: str, *, max_pages: int | None = None, **params) -> list:
+        """Follow `paging` and return every page's `response` items concatenated (up to max_pages)."""
         body = self.get(endpoint, **params)
         items = list(body["response"])
         total = (body.get("paging") or {}).get("total", 1)
+        if max_pages is not None:
+            total = min(total, max_pages)
         for page in range(2, total + 1):
             items.extend(self.get(endpoint, **params, page=page)["response"])
         return items
@@ -96,6 +97,8 @@ class ApiFootball:
         minute = resp.headers.get("x-ratelimit-remaining")
         if minute is not None:
             self.minute_remaining = int(minute)
+        if resp.status_code == 429:
+            raise ApiError(endpoint, {"rateLimit": "HTTP 429 Too Many Requests"})
         resp.raise_for_status()
         body = resp.json()
         # "errors" is [] when fine, or a dict like {"plan": "..."} / {"token": "..."}.
