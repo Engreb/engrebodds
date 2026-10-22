@@ -37,8 +37,8 @@ ingest/.venv/Scripts/python -m pytest -q ingest
 | `sync_reference` | Mondays 02:50 | Leagues, seasons, coverage; sets each league's tier (full / goals / off) |
 | `sync_fixtures` | 03:20, 15:20 | Fixtures by date, yesterday to 3 days ahead |
 | `sync_odds` | 05:05, 10:05, 14:05, 18:05 | Pre-match odds, today and tomorrow; changed prices only |
-| `sync_results` | every 30 min | Live and unfinished matches, grading, odds thinning |
-| `sync_stats` | every 30 min (after results) | Statistics for finished full-tier matches still missing them |
+| `sync_results` | every 15 min | Live and unfinished matches, grading, odds thinning |
+| `sync_stats` | every 15 min (after results) | Statistics for finished full-tier matches still missing them |
 | `sync_standings` | 06:40 | League tables for leagues playing this week |
 | `audit` | by hand | Coverage report into `reports/` |
 

@@ -1,8 +1,9 @@
 # Scheduled ingestion. Times are UTC (WAT = UTC+1).
 #
-# Budget: private repos get 2,000 free Actions minutes a month and each run bills at least a minute.
-# The live run every 30 minutes (~1,440 min) plus the others (~250 min) stays inside that.
-# Every 15 minutes would need GitHub Pro (3,000 min).
+# Budget: the repo is public, so Actions minutes are free and unlimited; the live run goes every 15 minutes.
+# If the repo is made private, drop the live run to every 30 minutes ("0,30 * * * *", in the case below too):
+# private repos get 2,000 free minutes a month and each run bills at least one.
+# GitHub disables schedules in a public repo after 60 days without a commit.
 #
 # Secrets (Settings -> Secrets and variables -> Actions):
 #   API_FOOTBALL_KEY   API-Football key (Pro plan)
@@ -13,7 +14,7 @@ name: Ingest
 
 on:
   schedule:
-    - cron: "0,30 * * * *"        # live: results, grading, odds thinning, missing statistics
+    - cron: "0,15,30,45 * * * *"  # live: results, grading, odds thinning, missing statistics
     - cron: "20 3,15 * * *"       # fixtures, yesterday to 3 days ahead
     - cron: "5 5,10,14,18 * * *"  # odds for today and tomorrow
     - cron: "40 6 * * *"          # league tables
@@ -56,7 +57,7 @@ jobs:
           MANUAL: ${{ inputs.jobs }}
         run: |
           case "$SCHEDULE" in
-            "0,30 * * * *")        jobs="sync_results sync_stats" ;;
+            "0,15,30,45 * * * *")  jobs="sync_results sync_stats" ;;
             "20 3,15 * * *")       jobs="sync_fixtures" ;;
             "5 5,10,14,18 * * *")  jobs="sync_odds" ;;
             "40 6 * * *")          jobs="sync_standings" ;;
