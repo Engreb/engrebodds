@@ -40,7 +40,14 @@ ingest/.venv/Scripts/python -m pytest -q ingest
 | `sync_results` | every 15 min (:07, :22, :37, :52) | Live and unfinished matches, grading, odds thinning |
 | `sync_stats` | every 15 min (after results) | Statistics for finished full-tier matches still missing them |
 | `sync_standings` | 06:40 | League tables for leagues playing this week |
+| `backfill` | 04:31 | Past seasons of fixtures and results, one request per league-season; stops at the quota floor |
 | `audit` | by hand | Coverage report into `reports/` |
+
+These are the **Pro** schedules. The workflow reads the repository variable `API_PLAN`
+(Settings → Secrets and variables → Actions → Variables): unless it is `pro`, the free profile runs —
+results every 3 hours, fixtures for yesterday to tomorrow, odds once a day (2 pages per date), no league
+tables, and the nightly backfill using the rest of the 100 daily requests while keeping 30 in reserve.
+**When you upgrade API-Football to Pro, add the variable `API_PLAN` = `pro`.**
 
 Options: `--days-back`, `--days-ahead`, `--max-pages`, `--limit` (see `python -m engrebodds_ingest --help`).
 Every run is logged in the `ingestion_runs` table with requests used, rows written, notes and errors.

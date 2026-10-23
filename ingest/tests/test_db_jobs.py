@@ -163,3 +163,33 @@ def test_standings_replace(conn):
     resp[0]["league"]["standings"][0].pop()
     assert apply_standings(conn, league_id, 2027, resp) == 1
     assert conn.execute("select count(*) from public.standings where league_id = %s", (league_id,)).fetchone()[0] == 1
+
+
+def test_backfill_loads_a_season_and_skips_done_ones(conn):
+    import httpx
+    from engrebodds_ingest.api import ApiFootball
+    from engrebodds_ingest.jobs.backfill import DUE, load_season
+
+    apply_leagues(conn, LEAGUES)
+    window = {"first": 2025, "last": 2025, "limit": 10_000}
+    ours = {3, 12, 45, 559, 399}
+
+    def due():
+        return [api_id for _, api_id, _, _ in conn.execute(DUE, window).fetchall() if api_id in ours]
+
+    # Past (non-current) seasons only; pinned first (CAF CL, then NPFL), then full tier; the Thai cup is off.
+    assert due() == [12, 399, 3, 45, 559]
+
+    requests = []
+
+    def handler(req):
+        requests.append(dict(req.url.params))
+        return httpx.Response(200, json=load("fixtures_sample.json"))
+
+    api = ApiFootball("test-key", transport=httpx.MockTransport(handler))
+    league_id = conn.execute("select id from public.leagues where api_league_id = 12").fetchone()[0]
+    ids, notes = load_season(conn, api, league_id, 12, 2025)
+
+    assert requests == [{"league": "12", "season": "2025"}]
+    assert 1644171 in ids and notes == ["fixture 1639281 (Rathfriland v Ards): PEN without a penalty score"]
+    assert due() == [399, 3, 45, 559]          # CAF CL 2025 done, not offered again

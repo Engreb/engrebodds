@@ -11,7 +11,9 @@ OPTIONS = {
     "days_back": "days before today (sync_fixtures)",
     "days_ahead": "days after today (sync_fixtures, sync_odds)",
     "max_pages": "cap on pages per date (sync_odds; useful on the free plan)",
-    "limit": "cap on fixtures or leagues per run (sync_stats, sync_standings)",
+    "limit": "cap on fixtures, leagues or league-seasons per run (sync_stats, sync_standings, backfill)",
+    "first_season": "earliest season label to load (backfill; free plan allows 2022-2024)",
+    "last_season": "latest season label to load (backfill)",
 }
 
 

@@ -3,11 +3,12 @@
 from collections.abc import Callable
 
 from engrebodds_ingest.jobs import (
-    audit, sync_fixtures, sync_odds, sync_reference, sync_results, sync_standings, sync_stats,
+    audit, backfill, sync_fixtures, sync_odds, sync_reference, sync_results, sync_standings, sync_stats,
 )
 
 JOBS: dict[str, Callable[..., None]] = {
     "audit": audit.run,
+    "backfill": backfill.run,
     "sync_reference": sync_reference.run,
     "sync_fixtures": sync_fixtures.run,
     "sync_results": sync_results.run,

@@ -1,13 +1,20 @@
 # Scheduled ingestion. Times are UTC (WAT = UTC+1).
 #
-# Budget: the repo is public, so Actions minutes are free and unlimited; the live run goes every 15 minutes.
+# Two profiles, chosen by the repository variable API_PLAN (Settings -> Secrets and variables -> Actions ->
+# Variables). Anything other than "pro" (including unset) uses the free profile.
+#   pro   7,500 requests/day: live results every 15 minutes, full odds, league tables, big nightly backfill.
+#   free  100 requests/day: no tips are published yet, so the backfill comes first; live jobs run a few
+#         times a day (results every 3 hours, odds once, no league tables) and the backfill gets the rest,
+#         keeping 30 requests in reserve.
+#
+# Budget: the repo is public, so Actions minutes are free and unlimited.
 # If the repo is made private, drop the live run to every 30 minutes ("7,37 * * * *", in the case below too):
 # private repos get 2,000 free minutes a month and each run bills at least one.
 # GitHub disables schedules in a public repo after 60 days without a commit.
 # Times avoid the top of the hour: GitHub delays or drops scheduled runs when it is busy, worst at :00.
 #
 # Secrets (Settings -> Secrets and variables -> Actions):
-#   API_FOOTBALL_KEY   API-Football key (Pro plan)
+#   API_FOOTBALL_KEY   API-Football key
 #   DATABASE_URL       Supabase *session pooler* connection string (GitHub runners have no IPv6,
 #                      so the direct db.<ref>.supabase.co address won't connect)
 
@@ -16,10 +23,11 @@ name: Ingest
 on:
   schedule:
     - cron: "7,22,37,52 * * * *"   # live: results, grading, odds thinning, missing statistics
-    - cron: "20 3,15 * * *"       # fixtures, yesterday to 3 days ahead
+    - cron: "20 3,15 * * *"       # fixtures
     - cron: "13 5,10,14,18 * * *" # odds for today and tomorrow
     - cron: "40 6 * * *"          # league tables
     - cron: "50 2 * * 1"          # leagues, seasons and tiers (Mondays)
+    - cron: "31 4 * * *"          # history backfill
   workflow_dispatch:
     inputs:
       jobs:
@@ -39,7 +47,6 @@ jobs:
     env:
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      API_QUOTA_FLOOR: "500"
     steps:
       - uses: actions/checkout@v4
 
@@ -51,29 +58,56 @@ jobs:
 
       - run: pip install -e ./ingest
 
-      - name: Pick jobs for this schedule
+      # Output: commands separated by ";", each "job [options]", and the quota floor for batch jobs.
+      - name: Pick jobs for this schedule and plan
         id: pick
         env:
           SCHEDULE: ${{ github.event.schedule }}
           MANUAL: ${{ inputs.jobs }}
+          PLAN: ${{ vars.API_PLAN }}
         run: |
-          case "$SCHEDULE" in
-            "7,22,37,52 * * * *")   jobs="sync_results sync_stats" ;;
-            "20 3,15 * * *")       jobs="sync_fixtures" ;;
-            "13 5,10,14,18 * * *") jobs="sync_odds" ;;
-            "40 6 * * *")          jobs="sync_standings" ;;
-            "50 2 * * 1")          jobs="sync_reference" ;;
-            *)                     jobs="$MANUAL" ;;
-          esac
-          echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+          hour=$((10#$(date -u +%H))); minute=$((10#$(date -u +%M)))
+          if [ "$PLAN" = "pro" ]; then
+            floor=500
+            case "$SCHEDULE" in
+              "7,22,37,52 * * * *")   cmds="sync_results;sync_stats" ;;
+              "20 3,15 * * *")       cmds="sync_fixtures" ;;
+              "13 5,10,14,18 * * *") cmds="sync_odds" ;;
+              "40 6 * * *")          cmds="sync_standings" ;;
+              "50 2 * * 1")          cmds="sync_reference" ;;
+              "31 4 * * *")          cmds="backfill --limit 1000 --first-season 2021 --last-season 2025" ;;
+              *)                     cmds="${MANUAL// /;}" ;;
+            esac
+          else
+            floor=30
+            case "$SCHEDULE" in
+              "7,22,37,52 * * * *")
+                # every 3 hours, first slot of the hour only (a late run can slip, which is fine)
+                if [ $((hour % 3)) -eq 0 ] && [ "$minute" -lt 15 ]; then cmds="sync_results"; else cmds=""; fi ;;
+              "20 3,15 * * *")       cmds="sync_fixtures --days-ahead 1" ;;
+              "13 5,10,14,18 * * *")
+                if [ "$hour" -eq 10 ]; then cmds="sync_odds --max-pages 2"; else cmds=""; fi ;;
+              "40 6 * * *")          cmds="" ;;   # the free plan can't read current-season tables
+              "50 2 * * 1")          cmds="sync_reference" ;;
+              "31 4 * * *")          cmds="backfill --limit 100" ;;
+              *)                     cmds="${MANUAL// /;}" ;;
+            esac
+          fi
+          echo "Plan: ${PLAN:-free (unset)}; commands: ${cmds:-none}"
+          echo "cmds=$cmds" >> "$GITHUB_OUTPUT"
+          echo "floor=$floor" >> "$GITHUB_OUTPUT"
 
-      # Run every job even if an earlier one fails, then fail the workflow so GitHub emails an alert.
+      # Run every command even if an earlier one fails, then fail the workflow so GitHub emails an alert.
       - name: Run
         env:
-          JOBS: ${{ steps.pick.outputs.jobs }}
+          CMDS: ${{ steps.pick.outputs.cmds }}
+          API_QUOTA_FLOOR: ${{ steps.pick.outputs.floor }}
         run: |
           failed=0
-          for job in $JOBS; do
-            python -m engrebodds_ingest "$job" || failed=1
+          IFS=';' read -ra commands <<< "$CMDS"
+          for cmd in "${commands[@]}"; do
+            [ -z "${cmd// /}" ] && continue
+            # shellcheck disable=SC2086  # split "job --option value" into words
+            python -m engrebodds_ingest $cmd || failed=1
           done
           exit $failed
