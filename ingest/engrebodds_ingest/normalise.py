@@ -182,19 +182,16 @@ def fixture_row(item: dict) -> FixtureRow:
 
 
 def fixture_issues(row: FixtureRow) -> list[str]:
-    """Scores that don't add up. These matches need checking before their tips are trusted."""
-    issues = []
+    """Scores that don't add up. These matches need checking before their tips are trusted.
+
+    No "level score" checks: in the second leg of a two-legged tie, extra time or penalties
+    follow a level aggregate, so this match's own score can be anything (e.g. 0-1 then penalties).
+    """
     if row.status in FINAL and (row.home_90 is None or row.away_90 is None):
-        issues.append("finished without a 90-minute score")
-        return issues
-    if row.status in ("AET", "PEN") and row.home_90 != row.away_90:
-        issues.append(f"{row.status} but the 90-minute score {row.home_90}-{row.away_90} is not level")
-    if row.status == "PEN":
-        if row.home_pen is None or row.away_pen is None:
-            issues.append("PEN without a penalty score")
-        elif (row.home_90 or 0) + (row.home_et or 0) != (row.away_90 or 0) + (row.away_et or 0):
-            issues.append("PEN but the score after extra time is not level")
-    return issues
+        return ["finished without a 90-minute score"]
+    if row.status == "PEN" and (row.home_pen is None or row.away_pen is None):
+        return ["PEN without a penalty score"]
+    return []
 
 
 # ---------- match statistics ----------

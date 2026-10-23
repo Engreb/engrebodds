@@ -128,10 +128,19 @@ def test_penalties(fixtures):
 
 
 def test_inconsistent_score_flagged(fixtures):
-    # Recorded as decided on penalties, but 1-0 after 90 minutes and no penalty score.
-    issues = fixture_issues(fixtures[1639281])
-    assert any("not level" in i for i in issues)
-    assert any("penalty score" in i for i in issues)
+    # Recorded as decided on penalties, but with no penalty score.
+    assert fixture_issues(fixtures[1639281]) == ["PEN without a penalty score"]
+
+
+def test_second_leg_not_flagged(fixtures):
+    # Two-legged ties: penalties or extra time follow a level aggregate, so this leg's score needn't be level
+    # (seen live: Palmeiras v Fluminense, 0-1 after 90 minutes, then penalties).
+    from dataclasses import replace
+    base = fixtures[1646585]
+    on_pens = replace(base, home_90=0, away_90=1, home_et=0, away_et=0, home_pen=4, away_pen=3)
+    after_et = replace(base, status="AET", home_90=0, away_90=1, home_et=1, away_et=0, home_pen=None, away_pen=None)
+    assert fixture_issues(on_pens) == []
+    assert fixture_issues(after_et) == []
 
 
 # ---------- statistics ----------

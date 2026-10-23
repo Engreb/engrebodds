@@ -88,7 +88,7 @@ def test_flagged_score_and_manual_correction(conn):
     rows, now = seed(conn)
     upsert_fixtures(conn, rows, now)
     issue = conn.execute("select score_issue from public.fixtures where api_fixture_id = 1639281").fetchone()[0]
-    assert "not level" in issue
+    assert issue == "PEN without a penalty score"
     # Someone checks the match, corrects it and locks the score; the next sync must not undo that.
     conn.execute("""update public.fixtures set home_90 = 1, away_90 = 1, home_pen = 4, away_pen = 5,
                     score_issue = null, manual_score = true where api_fixture_id = 1639281""")
