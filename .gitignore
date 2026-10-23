@@ -21,3 +21,7 @@ supabase/.temp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Backtest outputs built from football-data.co.uk (private use only, see docs/phase-2-plan.md)
+reports/backtest-*
+reports/*.log

@@ -155,3 +155,10 @@ New package `model/` (numpy, scipy, pandas) that depends on `ingest`, reusing `e
 
 ## Not in Phase 2
 Cross-league and mixed-league competitions (v1.1); CAF tips; value tips in markets other than 1X2 and O/U 2.5; corners/cards/shots/fouls; the website and written analysis (Phase 4); payments (Phase 5).
+
+## Addendum (24 Oct 2026): data basis for the backtest
+- **football-data.co.uk is for private use only.** Its data page: "its use is intended for private individuals only, NOT commercial or data training products". Emmanuel's decision: build the backtest now **for personal research**, and go commercial later. Conditions:
+  1. The CSVs and everything derived from them (backtest reports, charts, tuned parameters) stay **local and out of the public repo**: `ingest/data/` and `reports/backtest-*` are git-ignored.
+  2. These results must not be the basis for publishing tips commercially, including the free proofed-record period.
+  3. **Go-live checklist addition:** before any commercial use, re-run the backtest on **licensed historical odds** (e.g. TheStatsAPI, The Odds API), or get football-data's written permission.
+- **Pinnacle odds are unreliable since 23 July 2025** (football-data's note: their public feed runs behind the market, so they're no longer in market averages). Seasons up to 2024/25 keep the Pinnacle closing benchmark. The **2025/26 final holdout uses the market-average closing price** (margin removed) instead. Live CLV should use 1xBet closing or a market consensus, not Pinnacle; to be revisited in step 4.
