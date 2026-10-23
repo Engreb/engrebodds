@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engrebodds-model"
+version = "0.1.0"
+description = "Dixon-Coles goals model, markets, tips and backtest for Engrebodds"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["engrebodds_model*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

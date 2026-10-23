@@ -29,9 +29,14 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: ingest/pyproject.toml
+          cache-dependency-path: |
+            ingest/pyproject.toml
+            model/pyproject.toml
 
-      - run: pip install -e "./ingest[dev]"
+      - run: pip install -e "./ingest[dev]" -e "./model[dev]"
 
       - name: Python tests (including the ones against the database)
         run: pytest -q ingest
+
+      - name: Model tests
+        run: pytest -q model
