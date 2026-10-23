@@ -62,6 +62,7 @@ once locked, only a tip's result can change.
 
 **Odds storage (lean policy).** Bet365 (the displayed price) is stored for every market; 1xBet and Pinnacle
 for result, double chance, goals and GG/NG only. A price is written only when it changes. After a match,
-each selection keeps its opening, publication-time and closing prices.
+only the full history of tipped selections and the main-market closing prices (all three bookmakers) are kept;
+the price behind each tip is also stored on the tip itself (`ref_odds`).
 
 **Failed runs** make the GitHub workflow fail, which emails the repo owner.
