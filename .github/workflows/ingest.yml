@@ -32,10 +32,15 @@ on:
     # GitHub often starts scheduled runs late (hours, at busy times).
     - cron: "17 */3 * * *"        # free: results every 3 hours
     - cron: "43 10 * * *"         # free: odds once a day
+    # Both plans (no API requests): model predictions twice a day, shadow evaluation on Mondays.
+    - cron: "57 5,17 * * *"       # predictions for the next 48 hours
+    - cron: "29 7 * * 1"          # shadow evaluation of frozen predictions
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Jobs to run, space-separated (e.g. sync_fixtures sync_odds)"
+        description: >-
+          Jobs to run: ingest jobs space-separated (e.g. sync_fixtures sync_odds), or one model command
+          prefixed "model:" (model:predict, model:shadow_report, model:tune_live, model:activate_settings 3)
         required: true
         default: "sync_results sync_stats"
 
@@ -47,7 +52,7 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 120 || 20 }}   # tune_live can be long
     env:
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -58,9 +63,11 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: ingest/pyproject.toml
+          cache-dependency-path: |
+            ingest/pyproject.toml
+            model/pyproject.toml
 
-      - run: pip install -e ./ingest
+      - run: pip install -e ./ingest -e ./model
 
       # Output: commands separated by ";", each "job [options]", and the quota floor for batch jobs.
       - name: Pick jobs for this schedule and plan
@@ -70,6 +77,11 @@ jobs:
           MANUAL: ${{ inputs.jobs }}
           PLAN: ${{ vars.API_PLAN }}
         run: |
+          # Manual input: one "model:" command (may have arguments), ";"-separated commands, or job names.
+          case "$MANUAL" in
+            model:*|*";"*) MANUAL_CMDS="$MANUAL" ;;
+            *)             MANUAL_CMDS="${MANUAL// /;}" ;;
+          esac
           if [ "$PLAN" = "pro" ]; then
             floor=500
             case "$SCHEDULE" in
@@ -80,7 +92,9 @@ jobs:
               "50 2 * * 1")          cmds="sync_reference" ;;
               "31 4 * * *")          cmds="backfill --limit 1000 --first-season 2021 --last-season 2025" ;;
               "17 */3 * * *" | "43 10 * * *") cmds="" ;;   # free-plan lines
-              *)                     cmds="${MANUAL// /;}" ;;
+              "57 5,17 * * *")       cmds="model:predict" ;;
+              "29 7 * * 1")          cmds="model:shadow_report" ;;
+              *)                     cmds="$MANUAL_CMDS" ;;
             esac
           else
             floor=30
@@ -92,7 +106,9 @@ jobs:
               "40 6 * * *")          cmds="" ;;   # the free plan can't read current-season tables
               "50 2 * * 1")          cmds="sync_reference" ;;
               "31 4 * * *")          cmds="backfill --limit 100" ;;
-              *)                     cmds="${MANUAL// /;}" ;;
+              "57 5,17 * * *")       cmds="model:predict" ;;
+              "29 7 * * 1")          cmds="model:shadow_report" ;;
+              *)                     cmds="$MANUAL_CMDS" ;;
             esac
           fi
           echo "Plan: ${PLAN:-free (unset)}; commands: ${cmds:-none}"
@@ -110,6 +126,9 @@ jobs:
           for cmd in "${commands[@]}"; do
             [ -z "${cmd// /}" ] && continue
             # shellcheck disable=SC2086  # split "job --option value" into words
-            python -m engrebodds_ingest $cmd || failed=1
+            case "$cmd" in
+              model:*) python -m engrebodds_model ${cmd#model:} || failed=1 ;;
+              *)       python -m engrebodds_ingest $cmd || failed=1 ;;
+            esac
           done
           exit $failed

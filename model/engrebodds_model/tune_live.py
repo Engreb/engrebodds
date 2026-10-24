@@ -3,23 +3,21 @@
 football-data.co.uk is private-use only, so nothing tuned on it may go into the live model. This loads
 finished fixtures for allowlisted domestic leagues from Supabase, runs the same rolling season-by-season
 validation as the research backtest (an experiment is accepted only if it wins out of sample), and writes
-the chosen settings to model/live_settings.json.
+the result to public.model_settings as an INACTIVE row with its validation ladder attached. Activation is a
+separate, manual step after review (python -m engrebodds_model activate_settings <id>).
 
-Run once the history backfill has loaded enough seasons:
-    python -m engrebodds_model.tune_live            (uses DATABASE_URL from .env)
+Run once the history backfill has loaded enough seasons (on GitHub: Ingest workflow, manual run, "tune_live").
 """
 
 import json
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pandas as pd
 
 from engrebodds_model.backtest import validation as val
 from engrebodds_model.backtest.walkforward import Config, walk_forward
 
-SETTINGS_FILE = Path(__file__).resolve().parents[1] / "live_settings.json"
 GRID = [(xi, pen) for xi in (0.0015, 0.003) for pen in (1.0, 3.0, 8.0)]
 MIN_SEASONS = 3          # need at least one training season before two validation seasons
 
@@ -135,14 +133,28 @@ def _brief(res: dict) -> dict:
             "per_season": [float(d) for d in res["diffs"]]}
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    """Tune on API-Football data and store the result as an inactive model_settings row (or print it)."""
+    import argparse
+
     import psycopg
+
     from engrebodds_ingest.config import load_settings
+    from engrebodds_model.live import settings as live_settings
+
+    parser = argparse.ArgumentParser(prog="tune_live")
+    parser.add_argument("--dry-run", action="store_true", help="print the result instead of saving it")
+    args = parser.parse_args(argv)
     with psycopg.connect(load_settings().database_url) as conn:
         df = load(conn)
-    settings = tune(df)
-    SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
-    print(f"Wrote {SETTINGS_FILE} (validated on {settings['validated_on']})")
+        tuned = tune(df)
+        if args.dry_run:
+            print(json.dumps(tuned, indent=2))
+            return
+        settings_id = live_settings.save(conn, tuned)
+        conn.commit()
+    print(f"Saved model_settings id {settings_id} (inactive, validated on {tuned['validated_on']}). "
+          f"Review its ladder, then activate it with: python -m engrebodds_model activate_settings {settings_id}")
 
 
 if __name__ == "__main__":

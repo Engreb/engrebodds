@@ -56,3 +56,15 @@ def test_implied_rates_reproduce_market_prices():
     target = (prob(m, "1X2", "1"), prob(m, "1X2", "2"), prob(m, "OU", "O", 2.5))
     lam, mu = implied_rates(*target)
     assert lam == pytest.approx(1.7, abs=0.02) and mu == pytest.approx(0.9, abs=0.02)
+
+
+def test_power_demargin_sums_to_one_and_favours_the_favourite():
+    from engrebodds_model.backtest.metrics import demargin
+    from engrebodds_model.implied import demargin_power
+    prices = [1.45, 4.5, 7.5]                     # about 6% margin
+    pw = demargin_power(prices)
+    prop = demargin([prices[0]], [prices[1]], [prices[2]])[0]
+    assert pw.sum() == pytest.approx(1.0)
+    assert pw[0] > prop[0] and pw[2] < prop[2]     # more margin taken off the longshot
+    assert np.isnan(demargin_power([1.9, np.nan])).all()
+    assert demargin_power([2.0, 2.0]) == pytest.approx([0.5, 0.5])

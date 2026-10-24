@@ -130,9 +130,11 @@ def test_odds_changed_prices_only(conn):
     by_book = dict(conn.execute("""select b.name, count(distinct o.market_code) from public.odds_snapshots o
                                    join public.bookmakers b on b.id = o.bookmaker_id
                                    where o.fixture_id = %s group by b.name""", (fid,)).fetchall())
-    assert by_book["Bet365"] > by_book["Pinnacle"] and by_book["Pinnacle"] <= 4   # lean policy
+    display = conn.execute("select name from public.bookmakers where is_display").fetchone()[0]   # 1xBet since 0011
+    others = [name for name in by_book if name != display]
+    assert others and all(by_book[display] > by_book[o] and by_book[o] <= 4 for o in others)   # lean policy
     assert conn.execute("select count(*) from public.odds_snapshots o join public.bookmakers b on b.id = o.bookmaker_id "
-                        "where o.fixture_id = %s and o.market_code = 'CS' and b.name <> 'Bet365'",
+                        "where o.fixture_id = %s and o.market_code = 'CS' and not b.is_display",
                         (fid,)).fetchone()[0] == 0
 
     assert store_odds(conn, [item], before_ko + timedelta(hours=1)) == 0   # nothing changed

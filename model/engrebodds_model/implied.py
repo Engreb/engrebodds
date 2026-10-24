@@ -5,10 +5,26 @@ them; every other market (builder combos, correct score, half-time...) can then 
 """
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import brentq, least_squares
 
 from engrebodds_model.dixon_coles import score_matrix
 from engrebodds_model.markets import prob
+
+
+def demargin_power(prices) -> np.ndarray:
+    """Probabilities from one market's prices with the margin removed by the power method.
+
+    Finds k so that sum((1/price)^k) = 1 and returns (1/price)^k. Unlike proportional removal it takes
+    more margin off longshots than favourites, which counters the favourite-longshot bias.
+    Used live (1xBet); the backtest's experiment 0 used proportional removal (backtest/metrics.demargin).
+    """
+    q = 1.0 / np.asarray(prices, dtype=float)
+    if not np.all(np.isfinite(q)) or np.any(q <= 0):
+        return np.full(q.shape, np.nan)
+    if abs(q.sum() - 1.0) < 1e-12:
+        return q
+    k = brentq(lambda k: np.sum(q ** k) - 1.0, 1e-3, 50.0)
+    return q ** k
 
 
 def implied_rates(p_home: float, p_away: float, p_over25: float, rho: float = -0.05) -> tuple[float, float]:

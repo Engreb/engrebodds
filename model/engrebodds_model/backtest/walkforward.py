@@ -96,65 +96,107 @@ def _new_team_priors(train: pd.DataFrame, current_season: str, teams: list, mode
     return pa, pd_
 
 
+@dataclass
+class FittedGroup:
+    """A group's model fitted at one cutoff, ready to predict matches. Shared by the backtest and the live job."""
+    model: object
+    div_labels: list
+    shares: dict
+    counts: pd.Series
+    last_played: pd.Series
+    shots_model: object = None
+    conversion: dict | None = None
+    shots_weight: float = 0.0
+
+    def knows(self, home, away, league=None) -> bool:
+        teams = set(self.model.teams)
+        return home in teams and away in teams and league in self.div_labels
+
+    def rates(self, home, away, league=None) -> tuple[float, float]:
+        """Expected goals, with the shots blend applied when a shots model is present for both teams."""
+        k = self.div_labels.index(league)
+        lam, mu = self.model.rates(home, away, k)
+        sm = self.shots_model
+        if sm is not None and home in sm.teams and away in sm.teams:
+            lam, mu = blend_shots(lam, mu, *sm.rates(home, away, k), self.conversion[k], self.shots_weight)
+        return lam, mu
+
+    def quality(self, home, away) -> float:
+        """min(1.0, the less-documented team's matches in the last year / 10); never above 1."""
+        return min(1.0, min(self.counts.get(home, 0), self.counts.get(away, 0)) / QUALITY_MATCHES)
+
+    def freshness(self, home, away, at) -> int:
+        """Days since the less-recent team last played."""
+        last = min(self.last_played.get(home, pd.NaT), self.last_played.get(away, pd.NaT))
+        return int((pd.Timestamp(at) - last).days) if pd.notna(last) else 9999
+
+
+def blend_shots(lam: float, mu: float, shots_lam: float, shots_mu: float, conversion: float, s: float) -> tuple[float, float]:
+    """Blend goals-based and shots-based expected goals in log space: (1 - s) * goals + s * (conversion * shots)."""
+    return (float(np.exp((1 - s) * np.log(lam) + s * np.log(conversion * shots_lam))),
+            float(np.exp((1 - s) * np.log(mu) + s * np.log(conversion * shots_mu))))
+
+
+def fit_group(train: pd.DataFrame, cutoff, current_season: str, cfg: Config) -> "FittedGroup | None":
+    """Fit one group (a league, or a country's linked divisions) on matches strictly before the cutoff."""
+    if len(train) < MIN_TRAIN_MATCHES:
+        return None
+    cutoff = pd.Timestamp(cutoff)
+    w = _weights(train, cutoff, current_season, cfg)
+    divs = train.league.tolist() if cfg.link_divisions else None
+    data, teams = prepare(train.home.tolist(), train.away.tolist(), train.hg, train.ag, w, divs)
+    div_labels = sorted(set(divs)) if divs else [None]
+    model = fit(data, teams, cfg.penalty)
+    if cfg.new_team_prior:
+        pa, pd_ = _new_team_priors(train, current_season, teams, model)
+        if pa is not None:
+            model = fit(data, teams, cfg.penalty, pa, pd_)
+
+    shots_model, conversion = None, {}
+    if cfg.shots_weight > 0 and {"hst", "ast"} <= set(train.columns):
+        st = train.dropna(subset=["hst", "ast"])
+        if len(st) >= MIN_TRAIN_MATCHES:
+            sdivs = st.league.tolist() if cfg.link_divisions else None
+            sdata, steams = prepare(st.home.tolist(), st.away.tolist(), st.hst, st.ast,
+                                    _weights(st, cutoff, current_season, cfg), sdivs)
+            shots_model = fit(sdata, steams, cfg.penalty, fix_rho=True)
+            for k, label in enumerate(sorted(set(sdivs)) if sdivs else [None]):
+                part = st if label is None else st[st.league == label]
+                conversion[k] = (part.hg + part.ag).sum() / max((part.hst + part.ast).sum(), 1)
+
+    recent = train[train.date >= cutoff - pd.Timedelta(days=365)]
+    counts = pd.concat([recent.home, recent.away]).value_counts()
+    played = pd.concat([train[["date", "home"]].rename(columns={"home": "team"}),
+                        train[["date", "away"]].rename(columns={"away": "team"})])
+    last_played = played.groupby("team")["date"].max()
+    shares = {label: (cfg.ht_share if cfg.ht_share is not None
+                      else ht_share_from(train if label is None else train[train.league == label]))
+              for label in div_labels}
+    return FittedGroup(model, div_labels, shares, counts, last_played, shots_model, conversion, cfg.shots_weight)
+
+
 def walk_forward(df: pd.DataFrame, start, end, cfg: Config) -> pd.DataFrame:
     """Predictions for one group's matches with start <= date < end."""
     start, end = pd.Timestamp(start), pd.Timestamp(end)
     window, step = pd.Timedelta(days=cfg.window_days), pd.Timedelta(days=cfg.refit_days)
-    has_shots = cfg.shots_weight > 0 and {"hst", "ast"} <= set(df.columns)
     rows = []
     cutoff = start
     while cutoff < end:
         nxt = min(cutoff + step, end)
         test = df[(df.date >= cutoff) & (df.date < nxt)]
         train = df[(df.date < cutoff) & (df.date >= cutoff - window)]
-        if len(test) and len(train) >= MIN_TRAIN_MATCHES:
-            current = test.season.iloc[0]
-            w = _weights(train, cutoff, current, cfg)
-            divs = train.league.tolist() if cfg.link_divisions else None
-            data, teams = prepare(train.home.tolist(), train.away.tolist(), train.hg, train.ag, w, divs)
-            div_labels = sorted(set(divs)) if divs else [None]
-            model = fit(data, teams, cfg.penalty)
-            if cfg.new_team_prior:
-                pa, pd_ = _new_team_priors(train, current, teams, model)
-                if pa is not None:
-                    model = fit(data, teams, cfg.penalty, pa, pd_)
-
-            shots_model, conversion = None, {}
-            if has_shots:
-                st = train.dropna(subset=["hst", "ast"])
-                if len(st) >= MIN_TRAIN_MATCHES:
-                    sdivs = st.league.tolist() if cfg.link_divisions else None
-                    sdata, steams = prepare(st.home.tolist(), st.away.tolist(), st.hst, st.ast,
-                                            _weights(st, cutoff, current, cfg), sdivs)
-                    shots_model = fit(sdata, steams, cfg.penalty, fix_rho=True)
-                    for k, label in enumerate(sorted(set(sdivs)) if sdivs else [None]):
-                        part = st if label is None else st[st.league == label]
-                        conversion[k] = (part.hg + part.ag).sum() / max((part.hst + part.ast).sum(), 1)
-
-            recent = train[train.date >= cutoff - pd.Timedelta(days=365)]
-            counts = pd.concat([recent.home, recent.away]).value_counts()
-            shares = {label: (cfg.ht_share if cfg.ht_share is not None
-                              else ht_share_from(train if label is None else train[train.league == label]))
-                      for label in div_labels}
-            known = set(teams)
+        group = fit_group(train, cutoff, test.season.iloc[0], cfg) if len(test) else None
+        if group is not None:
             for idx, r in test.iterrows():
-                if r.home not in known or r.away not in known:
-                    continue
                 label = r.league if cfg.link_divisions else None
-                if label not in div_labels:
+                if not group.knows(r.home, r.away, label):
                     continue
-                k = div_labels.index(label)
-                lam, mu = model.rates(r.home, r.away, k)
-                if shots_model is not None and r.home in shots_model.teams and r.away in shots_model.teams:
-                    sl, sm = shots_model.rates(r.home, r.away, k)
-                    s = cfg.shots_weight
-                    lam = float(np.exp((1 - s) * np.log(lam) + s * np.log(conversion[k] * sl)))
-                    mu = float(np.exp((1 - s) * np.log(mu) + s * np.log(conversion[k] * sm)))
-                ft = score_matrix(lam, mu, model.rho)
-                ht = ht_matrix(lam, mu, shares[label])
-                row = {"idx": idx, "cutoff": cutoff, "lam": lam, "mu": mu, "rho": model.rho,
-                       "ht_share": shares[label],
-                       "dq": min(1.0, min(counts.get(r.home, 0), counts.get(r.away, 0)) / QUALITY_MATCHES),
+                lam, mu = group.rates(r.home, r.away, label)
+                rho = group.model.rho
+                ft = score_matrix(lam, mu, rho)
+                ht = ht_matrix(lam, mu, group.shares[label])
+                row = {"idx": idx, "cutoff": cutoff, "lam": lam, "mu": mu, "rho": rho,
+                       "ht_share": group.shares[label], "dq": group.quality(r.home, r.away),
                        "p_h": prob(ft, "1X2", "1"), "p_d": prob(ft, "1X2", "X"), "p_a": prob(ft, "1X2", "2"),
                        "p_btts": prob(ft, "BTTS", "Y"),
                        "p_ht_h": prob(ht, "HT_1X2", "1"), "p_ht_d": prob(ht, "HT_1X2", "X"),
