@@ -7,6 +7,10 @@ Rules follow docs/phase-2-plan.md:
 - Tips without a market price count in hit rate only, never in units or ROI.
 - Reference price (backtest stand-in for 1xBet): 1xBet early, else Betway early (both operate in Nigeria),
   else Bet365 early. O/U 2.5 has Bet365 only in these files.
+- Probabilities: the model's (optionally calibrated). For the most-likely product only, experiment 0 can use
+  the market instead: likely_source="market" takes de-margined early prices for 1X2 and O/U 2.5 and the model
+  for everything else; "implied" solves expected goals from those prices and derives every market from them.
+  The value product always uses the model.
 """
 
 from dataclasses import dataclass
@@ -15,8 +19,10 @@ import numpy as np
 import pandas as pd
 
 from engrebodds_model.backtest.metrics import bootstrap_ci, demargin, max_drawdown
+from engrebodds_model.calibration import Calibrator
 from engrebodds_model.dixon_coles import score_matrix
-from engrebodds_model.markets import OU_LINES, combo_prob, fair_odds, prob, selection_mask
+from engrebodds_model.implied import implied_rates
+from engrebodds_model.markets import OU_LINES, all_markets, combo_prob, fair_odds, key, prob, selection_mask
 
 RESULT_COLS = {"1": "h", "X": "d", "2": "a"}
 OU25_COLS = {"O": "o25", "U": "u25"}
@@ -24,6 +30,7 @@ REF_1X2 = (("xb", "1xBet"), ("bw", "Betway"), ("b365", "Bet365"))
 BUILDER_FIRST = ("1", "X", "2", "1X", "X2", "12")
 SLIP_TARGETS = {"odds2": (2.0, 0.60), "odds5": (5.0, 0.60), "odds10": (10.0, 0.60), "low_risk": (1.6, 0.80)}
 SLIP_MIN_LEG_PRICE = 1.12
+PINNACLE_STALE_FROM = pd.Timestamp("2025-07-23")   # football-data: Pinnacle's feed unreliable from this date
 
 
 @dataclass(frozen=True)
@@ -70,6 +77,19 @@ def close_fair_prob(row, market: str, selection: str, line, benchmark: str) -> f
     return np.nan
 
 
+def market_probs(row) -> dict[str, float]:
+    """De-margined early market probabilities for 1X2 and O/U 2.5 (Pinnacle early, market average after July 2025)."""
+    prefix = "avg" if row["date"] >= PINNACLE_STALE_FROM else "ps"
+    out = {}
+    p = demargin([row.get(f"{prefix}_h")], [row.get(f"{prefix}_d")], [row.get(f"{prefix}_a")])[0]
+    if np.all(np.isfinite(p)):
+        out.update({"1X2|1": float(p[0]), "1X2|X": float(p[1]), "1X2|2": float(p[2])})
+    p = demargin([row.get(f"{prefix}_o25")], [row.get(f"{prefix}_u25")])[0]
+    if np.all(np.isfinite(p)):
+        out.update({"OU|O|2.5": float(p[0]), "OU|U|2.5": float(p[1])})
+    return out
+
+
 def won(legs, hg: int, ag: int) -> bool:
     size = max(11, hg + 1, ag + 1)
     return all(bool(selection_mask(m, s, l, size)[hg, ag]) for m, s, l in legs)
@@ -79,11 +99,33 @@ def _describe(legs) -> str:
     return " & ".join(f"{m} {s}" + ("" if l is None else f" {l:g}") for m, s, l in legs)
 
 
-def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
+def match_tips(row, cfg: ProductConfig, benchmark: str, calibrator: Calibrator | None = None,
+               likely_source: str = "model") -> list[dict]:
     """Both products' tips for one predicted match (empty when data quality is too low)."""
     if row["dq"] < cfg.min_quality:
         return []
     ft = score_matrix(row["lam"], row["mu"], row["rho"])
+    model_p = all_markets(ft)
+    if calibrator is not None:
+        model_p = calibrator.apply(model_p)
+
+    # Most-likely probabilities: the model, or (experiment 0) the market where it has prices.
+    likely_p, likely_ft, market_keys = model_p, ft, set()
+    if likely_source in ("market", "implied"):
+        mp = market_probs(row)
+        if likely_source == "market" and mp:
+            likely_p, market_keys = {**model_p, **mp}, set(mp)
+        elif likely_source == "implied" and len(mp) == 5:
+            lam, mu = implied_rates(mp["1X2|1"], mp["1X2|2"], mp["OU|O|2.5"], row["rho"])
+            likely_ft = score_matrix(lam, mu, row["rho"])
+            likely_p, market_keys = all_markets(likely_ft), {"*"}
+
+    def lp(market, selection, line=None):
+        return likely_p.get(key(market, selection, line), prob(likely_ft, market, selection, line))
+
+    def p_source(*keys) -> str:
+        return "market" if "*" in market_keys or any(k in market_keys for k in keys) else "model"
+
     hg, ag = int(row["hg"]), int(row["ag"])
     base = {k: row[k] for k in ("league", "season", "date", "home", "away")}
     tips = []
@@ -93,6 +135,7 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
         m, s, l = legs[0]
         tip = {**base, "product": product, "slot": slot, "tip": _describe(legs), "p": p, "fair": fair_odds(p),
                "price": price, "source": source, "won": won(legs, hg, ag),
+               "p_source": "model" if product == "value" else p_source(*(key(*leg) for leg in legs)),
                "price_b365": market_price(row, "b365", m, s, l) if single else np.nan,
                "price_b365c": market_price(row, "b365c", m, s, l) if single else np.nan,
                "clv": np.nan, "single": single, "market": m, "selection": s, "line": l}
@@ -103,7 +146,7 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
         tips.append(tip)
 
     # Most-likely: result
-    p1x2 = {s: prob(ft, "1X2", s) for s in RESULT_COLS}
+    p1x2 = {s: lp("1X2", s) for s in RESULT_COLS}
     s = max(p1x2, key=p1x2.get)
     add("likely", "result", [("1X2", s, None)], p1x2[s], *ref_price(row, "1X2", s, None))
 
@@ -111,7 +154,7 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
     best = None
     for line in OU_LINES:
         for side in ("O", "U"):
-            p = prob(ft, "OU", side, line)
+            p = lp("OU", side, line)
             price, source = ref_price(row, "OU", side, line)
             if (price if _finite(price) else fair_odds(p)) >= cfg.goals_min and (best is None or p > best[0]):
                 best = (p, side, line, price, source)
@@ -120,7 +163,7 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
         add("likely", "goals", [("OU", side, line)], p, price, source)
 
     # Most-likely: GG/NG
-    p_y = prob(ft, "BTTS", "Y")
+    p_y = lp("BTTS", "Y")
     add("likely", "btts", [("BTTS", "Y" if p_y >= 0.5 else "N", None)], max(p_y, 1 - p_y))
 
     # Most-likely: builder (no market price exists for combos)
@@ -130,15 +173,15 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
         for line in OU_LINES:
             for side in ("O", "U"):
                 legs = [(market, first, None), ("OU", side, line)]
-                p = combo_prob(ft, legs)
+                p = combo_prob(likely_ft, legs)
                 if p > 0 and fair_odds(p) >= cfg.builder_min and (best is None or p > best[0]):
                     best = (p, legs)
     if best:
         add("likely", "builder", best[1], best[0])
 
     # Value: 1X2 and O/U 2.5 only, the single best edge
-    cands = [("1X2", s, None, p1x2[s]) for s in RESULT_COLS]
-    cands += [("OU", side, 2.5, prob(ft, "OU", side, 2.5)) for side in ("O", "U")]
+    cands = [("1X2", s, None, model_p[key("1X2", s)]) for s in RESULT_COLS]
+    cands += [("OU", side, 2.5, model_p[key("OU", side, 2.5)]) for side in ("O", "U")]
     best = None
     for m, s, l, p in cands:
         price, source = ref_price(row, m, s, l)
@@ -150,8 +193,9 @@ def match_tips(row, cfg: ProductConfig, benchmark: str) -> list[dict]:
     return tips
 
 
-def simulate(pred: pd.DataFrame, cfg: ProductConfig, benchmark: str = "psc") -> pd.DataFrame:
-    rows = [t for _, r in pred.iterrows() for t in match_tips(r, cfg, benchmark)]
+def simulate(pred: pd.DataFrame, cfg: ProductConfig, benchmark: str = "psc", calibrator: Calibrator | None = None,
+             likely_source: str = "model") -> pd.DataFrame:
+    rows = [t for _, r in pred.iterrows() for t in match_tips(r, cfg, benchmark, calibrator, likely_source)]
     return pd.DataFrame(rows)
 
 

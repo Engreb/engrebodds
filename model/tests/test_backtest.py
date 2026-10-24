@@ -139,3 +139,91 @@ def test_slips_one_leg_per_match_and_reach_target():
     # Highest probability first, H0 used once: 1.30 x 1.40 = 1.82 is short of 2, so a third leg (1.50) is added.
     assert s.loc["odds2", "legs"] == 3 and s.loc["odds2", "price"] == pytest.approx(1.3 * 1.4 * 1.5)
     assert s.loc["low_risk", "legs"] == 1        # only one distinct match has p >= 0.80
+
+
+def pyramid(seed=4, weeks=150):
+    """Two linked divisions with seasons, shots on target, and one team swap each season."""
+    rng = np.random.default_rng(seed)
+    div = {f"T{i}": ("A" if i < 8 else "B") for i in range(16)}
+    rows, day = [], pd.Timestamp("2020-08-01")
+    for w in range(weeks):
+        date = day + pd.Timedelta(days=7 * w)
+        season = f"{date.year if date.month >= 7 else date.year - 1}"
+        if w and date.month == 7 and date.day <= 7:            # swap a team between divisions each summer
+            a = next(t for t, d in div.items() if d == "A")
+            b = next(t for t, d in div.items() if d == "B")
+            div[a], div[b] = "B", "A"
+        for league in ("A", "B"):
+            order = rng.permutation([t for t, d in div.items() if d == league])
+            for k in range(0, 8, 2):
+                hg, ag = rng.poisson(1.5), rng.poisson(1.1)
+                rows.append({"league": league, "season": season, "date": date, "home": order[k],
+                             "away": order[k + 1], "hg": hg, "ag": ag, "hthg": 0, "htag": 0,
+                             "hst": hg + rng.poisson(3), "ast": ag + rng.poisson(2)})
+    return pd.DataFrame(rows)
+
+
+def test_new_options_never_see_the_future():
+    df = pyramid()
+    split = pd.Timestamp("2022-06-01")
+    poisoned = df.copy()
+    poisoned.loc[poisoned.date >= split, ["hg", "ag", "hst", "ast"]] = [9, 0, 20, 0]
+    cfg = Config(xi=0.002, penalty=2.0, link_divisions=True, new_team_prior=True, season_reset=0.7, shots_weight=0.3)
+    start = pd.Timestamp("2021-08-01")
+    clean = walk_forward(df[df.date < split], start, split, cfg)
+    dirty = walk_forward(poisoned, start, split, cfg)
+    assert len(clean) > 100 and set(clean.league) == {"A", "B"}
+    pd.testing.assert_series_equal(clean["p_h"], dirty["p_h"])
+    pd.testing.assert_series_equal(clean["p_o2.5"], dirty["p_o2.5"])
+
+
+def test_linked_fit_rates_promoted_team_immediately():
+    df = pyramid()
+    cfg = Config(xi=0.002, penalty=2.0, link_divisions=True)
+    first_week = pd.Timestamp("2022-08-06")
+    linked = walk_forward(df, first_week, first_week + pd.Timedelta(days=7), cfg)
+    alone = walk_forward(df[df.league == "A"], first_week, first_week + pd.Timedelta(days=7),
+                         Config(xi=0.002, penalty=2.0))
+    # In the linked fit the team that just moved into A already has matches (from B), so A's whole week is covered.
+    assert len(linked[linked.league == "A"]) >= len(alone)
+
+
+# ---------- experiment 0 and calibration in products ----------
+
+def market_row(**overrides):
+    # Model (lam 1.8 v 0.9) favours home; early Pinnacle prices favour the away side.
+    return row(ps_h=5.0, ps_d=4.0, ps_a=1.6, ps_o25=1.9, ps_u25=1.95, **overrides)
+
+
+def test_market_source_changes_most_likely_but_not_value():
+    model = {t["slot"]: t for t in match_tips(market_row(), ProductConfig(), "psc") if t["product"] == "likely"}
+    market = {t["slot"]: t for t in match_tips(market_row(), ProductConfig(), "psc", likely_source="market")
+              if t["product"] == "likely"}
+    assert model["result"]["tip"] == "1X2 1" and model["result"]["p_source"] == "model"
+    assert market["result"]["tip"] == "1X2 2" and market["result"]["p_source"] == "market"
+    assert market["builder"]["p_source"] == "model"            # unpriced markets keep the model
+    value_model = [t for t in match_tips(market_row(bw_a=9.0), ProductConfig(), "psc") if t["product"] == "value"]
+    value_market = [t for t in match_tips(market_row(bw_a=9.0), ProductConfig(), "psc", likely_source="market")
+                    if t["product"] == "value"]
+    assert value_model == value_market                          # value product stays model-only
+
+
+def test_implied_source_derives_every_market_from_prices():
+    tips = {t["slot"]: t for t in match_tips(market_row(), ProductConfig(), "psc", likely_source="implied")
+            if t["product"] == "likely"}
+    assert tips["result"]["tip"] == "1X2 2"
+    assert all(t["p_source"] == "market" for t in tips.values())
+
+
+def test_market_source_falls_back_to_model_without_prices():
+    tips = {t["slot"]: t for t in match_tips(row(), ProductConfig(), "psc", likely_source="market")
+            if t["product"] == "likely"}
+    assert tips["result"]["p_source"] == "model"
+
+
+def test_calibrator_feeds_tip_probabilities():
+    from engrebodds_model.calibration import Calibrator, LogisticMap
+    cal = Calibrator({"BTTS|Y": LogisticMap(0.0, 0.5)})
+    plain = next(t for t in match_tips(row(), ProductConfig(), "psc") if t["slot"] == "btts")
+    shrunk = next(t for t in match_tips(row(), ProductConfig(), "psc", calibrator=cal) if t["slot"] == "btts")
+    assert abs(shrunk["p"] - 0.5) < abs(plain["p"] - 0.5)

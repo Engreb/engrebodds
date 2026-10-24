@@ -137,3 +137,101 @@ def write_report(out_dir: Path, results: dict, gate: pd.DataFrame, eligibility: 
               _summary_row("Value (reference price)", fp["value"]["ref"])]
     L += ["", f"**Value leagues kept after the final holdout:** {', '.join(results['value_kept_after_final']) or 'none'}"]
     (out_dir / "report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+
+
+# ---------- model improvement report ----------
+
+def write_improvement_report(out_dir: Path, r: dict, gates: dict[str, pd.DataFrame], eligibility: pd.DataFrame) -> None:
+    L = ["# Model improvement backtest", "",
+         "> **Private research only.** Built from football-data.co.uk (private use only, no commercial use). "
+         "Nothing here may be used commercially or to justify publishing tips; production parameters are tuned "
+         "separately on API-Football data. See docs/model-improvement-plan.md.", "",
+         "Every experiment was chosen on earlier seasons and judged on the next (rolling validation over "
+         "2020/21, 2021/22, 2022/23). Accepted only if better on average **and** in at least 2 of the 3 seasons. "
+         "The 2023/24–2024/25 holdout and 2025/26 had been looked at once before (first backtest); 2026/27 to date "
+         "has never been used and is only a comparison (its benchmark is the market-average closing price, not Pinnacle).",
+         "", "## 1. Experiment ladder", "",
+         "| Experiment | 2020/21 | 2021/22 | 2022/23 | Mean change | Better in | Verdict | Matches compared |",
+         "|---|---|---|---|---|---|---|---|"]
+    for step in r["ladder"]:
+        if "skipped" in step:
+            L.append(f"| {step['name']} | — | — | — | — | — | skipped: {step['skipped']} | — |")
+            continue
+        d = step["diffs"]
+        L.append(f"| {step['name']} | {d[0]:+.4f} | {d[1]:+.4f} | {d[2]:+.4f} | {step['mean']:+.4f} | "
+                 f"{step['wins']}/3 | {'**accepted**' if step['accepted'] else 'rejected'} | "
+                 f"{step.get('matches_compared', '—')} |")
+    L += ["", "Changes are in log loss (negative = better): 1X2 for experiments 1, 2, 4, 5 and 3b; the average of "
+          "the goals markets (O/U 0.5–4.5, GG/NG, team totals) for 3a.", ""]
+    cov = [s for s in r["ladder"] if "coverage_before" in s]
+    if cov:
+        L.append("Coverage (validation-season matches with data quality ≥ 0.6): " + "; ".join(
+            f"{s['name'].split('.')[0]}: {s['coverage_before']} → {s['coverage_after']}" for s in cov))
+    c = r["final_config"]
+    L += ["", f"**Final model:** ξ = {c['xi']}, penalty {c['penalty']}, linked divisions {c['link_divisions']}, "
+          f"new-team prior {c['new_team_prior']}, season reset {c['season_reset']}, shots weight {c['shots_weight']}; "
+          f"goals calibration {r['calibration']['goals']}, draw shift {r['calibration']['draw']}; value edge {r['edge']:.0%}."]
+
+    s = r["holdout_same_matches"]
+    L += ["", "## 2. Holdout 2023/24–2024/25: first model vs improved", "",
+          f"On the same {s['matches']} matches: 1X2 log loss **first model {s['first_model']:.4f} → improved "
+          f"{s['improved']:.4f}**; Pinnacle closing {s['pinnacle_close']:.4f}. Gap to the market: "
+          f"{s['first_model'] - s['pinnacle_close']:+.4f} → {s['improved'] - s['pinnacle_close']:+.4f}.", "",
+          f"Coverage (matches with data quality ≥ 0.6): {s['coverage_first']} → {s['coverage_improved']}; "
+          f"July–September: {s['early_season_first']} → {s['early_season_improved']}.", ""]
+
+    L += ["## 3. League gate (holdout)", "",
+          "Pass = 1X2 log loss ≤ Pinnacle closing + 0.01 and calibration error ≤ 3pp. Experiment 0 is the early "
+          "market price itself (what the most-likely product would publish).", "",
+          "| League | First model gap | Improved gap | Improved gate | Experiment 0 gap | Experiment 0 gate |",
+          "|---|---|---|---|---|---|"]
+    first = gates["First backtest model"].set_index("league")
+    imp = gates["Improved model"].set_index("league")
+    exp0 = gates["Experiment 0 (early market, 1X2)"].set_index("league")
+    for code in imp.sort_values("ll_gap").index:
+        L.append(f"| {imp.loc[code, 'name']} | {first['ll_gap'].get(code, np.nan):+.4f} | {imp.loc[code, 'll_gap']:+.4f} | "
+                 f"{'pass' if imp.loc[code, 'gate'] else 'fail'} | {exp0['ll_gap'].get(code, np.nan):+.4f} | "
+                 f"{'pass' if exp0['gate'].get(code, False) else 'fail'} |")
+    L += ["", "Leagues passing: " + "; ".join(f"{n} {int(g['gate'].sum())}/{len(g)}" for n, g in gates.items())]
+
+    L += ["", "## 4. Most-likely product (holdout)", "", SUMMARY_HEAD]
+    for name, p in r["products"].items():
+        L.append(_summary_row(f"**{name}**", p["likely_all"]))
+        for slot, sm in p["likely_by_slot"].items():
+            L.append(_summary_row(f"&nbsp;&nbsp;{slot}", sm))
+
+    L += ["", "### Tip calibration (does each slot land as often as it says?)", ""]
+    for name, slots in r["tip_calibration"].items():
+        L += [f"**{name}**", "", "| Slot | Band | Tips | Predicted | Landed | Gap |", "|---|---|---|---|---|---|"]
+        for slot, rows in slots.items():
+            for b in rows:
+                L.append(f"| {slot} | {b['band']} | {b['n']} | {_rate(b['p'])} | {_rate(b['hit'])} | "
+                         f"{(b['hit'] - b['p']) * 100:+.1f}pp |")
+        L.append("")
+
+    v = r["products"]["Improved model"]["value"]
+    L += ["## 5. Value product (improved model, holdout)", "", SUMMARY_HEAD,
+          _summary_row("At reference price", v["ref"]), _summary_row("At Bet365 early", v["b365_early"]),
+          _summary_row("At Bet365 closing", v["b365_close"]), "",
+          "| League | Value tips | Mean CLV [95% CI] | ROI [95% CI] | Eligible |", "|---|---|---|---|---|"]
+    for row in eligibility.sort_values("clv", ascending=False).itertuples():
+        L.append(f"| {row.league} | {row.value_tips} | {_pct(row.clv, 2)} [{_pct(row.clv_lo, 2)}, {_pct(row.clv_hi, 2)}] | "
+                 f"{_pct(row.roi)} [{_pct(row.roi_lo)}, {_pct(row.roi_hi)}] | {'yes' if row.eligible else 'no'} |")
+    L += ["", f"**Value-eligible leagues (and passing the gate):** {', '.join(r['value_eligible']) or 'none'}"]
+
+    L += ["", "## 6. Slips (holdout)", "", "| Version | Slip | Count | Reached target | Hit rate | Model chance all land | ROI |",
+          "|---|---|---|---|---|---|---|"]
+    for label, table in (("Improved model", r["slips_improved"]), ("Experiment 0", r["slips_market"])):
+        for kind, sl in table.items():
+            L.append(f"| {label} | {kind} | {sl['slips']} | {_rate(sl['reached'])} | {_rate(sl['hit_rate'])} | "
+                     f"{_rate(sl['mean_p_all'])} | {_pct(sl['roi'])} |")
+
+    L += ["", "## 7. Later seasons (same matches for both models)", "",
+          "| Season | Matches | First model | Improved | Market-average close | Calibration error first → improved |",
+          "|---|---|---|---|---|---|"]
+    for label, x in r["later"].items():
+        L.append(f"| {label} | {x['matches']} | {x['first_model']:.4f} | {x['improved']:.4f} | {x['market_avg_close']:.4f} | "
+                 f"{x['calibration_first'] * 100:.1f}pp → {x['calibration_improved'] * 100:.1f}pp |")
+    kept = r["later"].get("2025/26", {}).get("value_kept", [])
+    L += ["", f"Value leagues kept after 2025/26: {', '.join(kept) or 'none'}. 2026/27 is a comparison only."]
+    (out_dir / "report.md").write_text("\n".join(L) + "\n", encoding="utf-8")

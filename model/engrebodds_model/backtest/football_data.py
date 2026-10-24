@@ -28,10 +28,12 @@ LEAGUES = {
 }
 # Season codes "1617" .. "2526". 2016/17-2018/19 are training history only.
 SEASONS = [f"{y % 100:02d}{(y + 1) % 100:02d}" for y in range(2016, 2026)]
+# The current season (2026/27 to date): used only to compare model versions, never for gate decisions.
+CURRENT = "2627"
 
 # Standard name -> football-data column(s), first present wins.
 COLUMNS = {
-    "hthg": ["HTHG"], "htag": ["HTAG"],
+    "hthg": ["HTHG"], "htag": ["HTAG"], "hst": ["HST"], "ast": ["AST"],
     "b365_h": ["B365H"], "b365_d": ["B365D"], "b365_a": ["B365A"],
     "b365c_h": ["B365CH"], "b365c_d": ["B365CD"], "b365c_a": ["B365CA"],
     "b365_o25": ["B365>2.5"], "b365_u25": ["B365<2.5"], "b365c_o25": ["B365C>2.5"], "b365c_u25": ["B365C<2.5"],
@@ -54,7 +56,11 @@ def path(code: str, season: str) -> Path:
 
 
 def download(codes=LEAGUES, seasons=SEASONS, refresh: bool = False, pause: float = 1.0) -> list[str]:
-    """Fetch missing files politely (one request a second). Returns messages for files that failed."""
+    """Fetch missing files politely (one request a second). Returns messages for files that failed.
+
+    football-data's fair-use policy asks for light automated downloads (at most twice a week): this only
+    fetches files that aren't cached, so don't pass refresh=True routinely.
+    """
     failed = []
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=60, follow_redirects=True) as client:
         for season in seasons:
