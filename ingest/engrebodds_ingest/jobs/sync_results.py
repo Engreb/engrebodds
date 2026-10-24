@@ -44,7 +44,15 @@ def fetch_due(api, due: list[tuple[int, object]], notes: list[str]):
             notes.append(f"ids refused ({e.errors['plan']}); fetching by date")
             wanted = set(ids[i:])
             for day in sorted({d for api_id, d in due if api_id in wanted}):
-                yield [x for x in api.get_all("/fixtures", date=day.isoformat()) if x["fixture"]["id"] in wanted]
+                try:
+                    items = api.get_all("/fixtures", date=day.isoformat())
+                except ApiError as date_error:
+                    # The free plan only serves yesterday to tomorrow; older dates wait for the Pro plan.
+                    if not (isinstance(date_error.errors, dict) and "plan" in date_error.errors):
+                        raise
+                    notes.append(f"{day}: date refused by the plan, skipped")
+                    continue
+                yield [x for x in items if x["fixture"]["id"] in wanted]
             return
 
 

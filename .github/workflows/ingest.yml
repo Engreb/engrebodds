@@ -28,6 +28,10 @@ on:
     - cron: "40 6 * * *"          # league tables
     - cron: "50 2 * * 1"          # leagues, seasons and tiers (Mondays)
     - cron: "31 4 * * *"          # history backfill
+    # Free plan only (ignored on Pro). Jobs are chosen by which line fired, never by the clock, because
+    # GitHub often starts scheduled runs late (hours, at busy times).
+    - cron: "17 */3 * * *"        # free: results every 3 hours
+    - cron: "43 10 * * *"         # free: odds once a day
   workflow_dispatch:
     inputs:
       jobs:
@@ -66,7 +70,6 @@ jobs:
           MANUAL: ${{ inputs.jobs }}
           PLAN: ${{ vars.API_PLAN }}
         run: |
-          hour=$((10#$(date -u +%H))); minute=$((10#$(date -u +%M)))
           if [ "$PLAN" = "pro" ]; then
             floor=500
             case "$SCHEDULE" in
@@ -76,17 +79,16 @@ jobs:
               "40 6 * * *")          cmds="sync_standings" ;;
               "50 2 * * 1")          cmds="sync_reference" ;;
               "31 4 * * *")          cmds="backfill --limit 1000 --first-season 2021 --last-season 2025" ;;
+              "17 */3 * * *" | "43 10 * * *") cmds="" ;;   # free-plan lines
               *)                     cmds="${MANUAL// /;}" ;;
             esac
           else
             floor=30
             case "$SCHEDULE" in
-              "7,22,37,52 * * * *")
-                # every 3 hours, first slot of the hour only (a late run can slip, which is fine)
-                if [ $((hour % 3)) -eq 0 ] && [ "$minute" -lt 15 ]; then cmds="sync_results"; else cmds=""; fi ;;
+              "7,22,37,52 * * * *" | "13 5,10,14,18 * * *") cmds="" ;;   # Pro-plan lines
+              "17 */3 * * *")        cmds="sync_results" ;;
+              "43 10 * * *")         cmds="sync_odds --max-pages 2" ;;
               "20 3,15 * * *")       cmds="sync_fixtures --days-ahead 1" ;;
-              "13 5,10,14,18 * * *")
-                if [ "$hour" -eq 10 ]; then cmds="sync_odds --max-pages 2"; else cmds=""; fi ;;
               "40 6 * * *")          cmds="" ;;   # the free plan can't read current-season tables
               "50 2 * * 1")          cmds="sync_reference" ;;
               "31 4 * * *")          cmds="backfill --limit 100" ;;

@@ -100,3 +100,22 @@ def test_http_429_waits_out_the_minute(monkeypatch):
 
     assert client(handler).get("/fixtures/statistics", fixture=1)["response"] == ["ok"]
     assert slept == [61]
+
+
+def test_results_fallback_skips_dates_the_plan_refuses():
+    from datetime import date
+    from engrebodds_ingest.jobs.sync_results import fetch_due
+
+    def handler(req):
+        if "ids" in req.url.params:
+            return httpx.Response(200, json={"errors": {"plan": "Free plans do not have access to the Ids parameter."}})
+        if req.url.params["date"] == "2026-10-21":
+            return httpx.Response(200, json={"errors": {"plan": "Free plans do not have access to this date."}})
+        return httpx.Response(200, json={"errors": [], "paging": {"current": 1, "total": 1},
+                                         "response": [{"fixture": {"id": 2}}, {"fixture": {"id": 99}}]})
+
+    notes = []
+    due = [(1, date(2026, 10, 21)), (2, date(2026, 10, 23))]
+    batches = list(fetch_due(client(handler), due, notes))
+    assert batches == [[{"fixture": {"id": 2}}]]          # the refused day is skipped, the allowed day kept
+    assert any("2026-10-21: date refused" in n for n in notes)
