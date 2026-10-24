@@ -101,7 +101,7 @@ def build(train: pd.DataFrame, upcoming: pd.DataFrame, odds: dict[int, dict], ls
         notes["market_final"] += bool(final)
         rows.append({
             "fixture_id": int(f.fixture_id), "model_version": ls.version, "settings_id": ls.id,
-            "lambda_home": round(lam, 3), "lambda_away": round(mu, 3),
+            "lambda_home": round(lam, 3), "lambda_away": round(mu, 3), "rho": round(float(rho), 4),
             "p_home": probs["1X2|1"], "p_draw": probs["1X2|X"], "p_away": probs["1X2|2"],
             "probs": probs, "final": final,
             "cs_top": [{"score": s, "p": round(p, 4)} for s, p in top_scores(ft)],
@@ -122,12 +122,13 @@ def build(train: pd.DataFrame, upcoming: pd.DataFrame, odds: dict[int, dict], ls
 
 
 UPSERT_PREDICTION = """
-insert into public.predictions (fixture_id, model_version, settings_id, lambda_home, lambda_away, p_home, p_draw, p_away,
-                                probs, final, cs_top, ht_score, data_quality, fresh_days, computed_at)
-values (%(fixture_id)s, %(model_version)s, %(settings_id)s, %(lambda_home)s, %(lambda_away)s, %(p_home)s, %(p_draw)s,
-        %(p_away)s, %(probs)s, %(final)s, %(cs_top)s, %(ht_score)s, %(data_quality)s, %(fresh_days)s, now())
+insert into public.predictions (fixture_id, model_version, settings_id, lambda_home, lambda_away, rho, p_home, p_draw,
+                                p_away, probs, final, cs_top, ht_score, data_quality, fresh_days, computed_at)
+values (%(fixture_id)s, %(model_version)s, %(settings_id)s, %(lambda_home)s, %(lambda_away)s, %(rho)s, %(p_home)s,
+        %(p_draw)s, %(p_away)s, %(probs)s, %(final)s, %(cs_top)s, %(ht_score)s, %(data_quality)s, %(fresh_days)s, now())
 on conflict (fixture_id, model_version) do update set
   settings_id = excluded.settings_id, lambda_home = excluded.lambda_home, lambda_away = excluded.lambda_away,
+  rho = excluded.rho,
   p_home = excluded.p_home, p_draw = excluded.p_draw, p_away = excluded.p_away, probs = excluded.probs,
   final = excluded.final, cs_top = excluded.cs_top, ht_score = excluded.ht_score,
   data_quality = excluded.data_quality, fresh_days = excluded.fresh_days, computed_at = excluded.computed_at

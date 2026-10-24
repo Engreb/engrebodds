@@ -46,7 +46,7 @@ select o.fixture_id, o.market_code, o.selection, o.line, o.price, o.captured_at,
 FROZEN_SQL = """
 select p.fixture_id, f.league_id::text as league, l.name as league_name, (f.kickoff_at at time zone 'UTC') as kickoff,
        f.home_90 as hg, f.away_90 as ag, p.model_version, p.settings_id, p.p_home, p.p_draw, p.p_away,
-       p.probs, p.final, p.data_quality, p.fresh_days
+       p.lambda_home, p.lambda_away, p.rho, p.probs, p.final, p.data_quality, p.fresh_days
   from public.predictions p
   join public.fixtures f on f.id = p.fixture_id
   join public.leagues l on l.id = f.league_id

@@ -34,7 +34,7 @@ def fixture(conn, hours_ahead: float) -> int:
 
 def row(fid: int, p_home=0.5) -> dict:
     return {"fixture_id": fid, "model_version": "dc-untuned", "settings_id": None, "lambda_home": 1.5,
-            "lambda_away": 1.1, "p_home": p_home, "p_draw": 0.27, "p_away": 0.73 - p_home,
+            "lambda_away": 1.1, "rho": -0.05, "p_home": p_home, "p_draw": 0.27, "p_away": 0.73 - p_home,
             "probs": {"1X2|1": p_home, "1X2|X": 0.27, "1X2|2": 0.73 - p_home, "OU|O|2.5": 0.52, "OU|U|2.5": 0.48},
             "final": {"1X2|1": {"p": 0.46, "bookmaker": "1xBet", "captured_at": datetime.now(UTC).isoformat()},
                       "1X2|X": {"p": 0.28, "bookmaker": "1xBet", "captured_at": datetime.now(UTC).isoformat()},

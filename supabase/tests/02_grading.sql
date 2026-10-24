@@ -23,9 +23,11 @@ declare
   v_no   integer := 0;
 begin
   select * into v_fix from public.fixtures where api_fixture_id = p_fixture;
-  insert into public.tips (fixture_id, slot, is_banker, model_prob, fair_odds, ref_odds, ref_bookmaker_id, is_free, kickoff_at)
+  insert into public.tips (fixture_id, slot, is_banker, model_prob, fair_odds, ref_odds, ref_bookmaker_id,
+                           ref_captured_at, is_free, kickoff_at)
   values (v_fix.id, p_slot, p_banker, p_prob, p_fair, p_ref,
           case when p_ref is not null then (select id from public.bookmakers where is_display) end,
+          case when p_ref is not null then now() end,
           p_free, v_fix.kickoff_at)
   returning id into v_id;
   for v_leg in select * from jsonb_array_elements(p_legs) loop
@@ -79,15 +81,17 @@ select is(pg_temp.res('gg'), 'void', 'postponed tip void after 48h');
 select is((select result || ' ' || settled_odds from public.slips where kind = 'odds2'), 'won 2.00',
           'slip won with the void leg removed from its odds');
 
--- Track record: 3 settled (home won 2.00, combo won 1.80 at fair odds, combo_x lost), 2 void.
-select is((select row(settled, won, void, hit_rate, avg_odds, units, roi, fair_priced)::text
+-- Track record: 3 settled (home won at 2.00, combo won with no market price, combo_x lost at 7.50), 2 void.
+-- Hit rate counts all three; units, ROI and average odds only the two priced tips.
+select is((select row(settled, won, void, hit_rate, priced, no_market_price, avg_odds, units, roi)::text
              from public.track_record_summary where breakdown = 'all'),
-          row(3, 2, 2, 0.6667, 3.77, 0.80, 0.2667, 1)::text,
-          'summary: hit rate with average odds, units and ROI; voids excluded');
+          row(3, 2, 2, 0.6667, 2, 1, 4.75, 0.00, 0.0000)::text,
+          'summary: hit rate on every settled tip; units, ROI and odds on priced tips only; voids excluded');
 select is((select units from public.track_record_summary where breakdown = 'banker'), 1.00, 'bankers counted once');
 select is((select settled from public.track_record_summary where breakdown = 'free'), 1::bigint, 'free tips');
-select is((select odds_source from public.track_record r join ids on ids.id = r.tip_id where ids.name = 'combo'),
-          'fair', 'a tip without bookmaker odds is flagged as fair-priced');
+select is((select odds_source || '/' || coalesce(profit_units::text, 'null') from public.track_record r
+             join ids on ids.id = r.tip_id where ids.name = 'combo'),
+          'no market price/null', 'a tip without a market price is labelled and earns no units');
 select is((select count(*) from public.track_record), 5::bigint, 'every graded tip, voids included, is on the record');
 
 select * from finish();

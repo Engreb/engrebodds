@@ -103,6 +103,8 @@ def evaluate(df: pd.DataFrame, closing: pd.DataFrame, history: pd.DataFrame, wee
         for version, g in part.groupby("model_version"):
             section["by_version"][version] = score(g, closing, history)
         report["sections"][name] = section
+    report["league_gate"] = {g.league_name.iloc[0]: league_gate(g, closing) for _, g in df.groupby("league")}
+    report["league_gate_candidates"] = sorted(n for n, e in report["league_gate"].items() if e["pass"])
     return report
 
 
@@ -127,4 +129,73 @@ def run(settings: Settings, days: int = 7, **_) -> None:
         ctx.notes.append(f"week: {w.get('matches', 0)} matches; log loss model {w.get('log_loss_model')}, "
                          f"final {w.get('log_loss_final')}, base rates {w.get('log_loss_base_rates')}; "
                          f"closing comparison on {w.get('closing', {}).get('matches', 0)} matches")
+        ctx.notes.append(f"league gate candidates: {', '.join(report['league_gate_candidates']) or 'none yet'}")
         ctx.notes.append(CAVEAT)
+
+
+# ---------- league gate: evaluates the product as it would be published ----------
+
+GATE_MIN_MATCHES = 150
+GATE_LOGLOSS = 0.01
+GATE_SLOT_CALIBRATION = 0.03
+GATE_SLOTS = ("result", "goals", "btts")
+
+
+def league_gate(df: pd.DataFrame, closing: pd.DataFrame) -> dict:
+    """Evidence for one league: tips simulated from frozen predictions with the live selection rules.
+
+    Passes with >= 150 matches, 1X2 log loss on p_final within 0.01 of de-margined closing odds, and calibration
+    of the selected tips within 3pp for each of result, goals and GG/NG. Prices at freeze time aren't kept, so the
+    goals slot's 1.30 threshold uses fair odds here (live uses the 1xBet price where present).
+    """
+    from engrebodds_model.backtest.products import won
+    from engrebodds_model.live.tips import select_tips
+
+    usable = df[df["probs"].map(bool) & df["rho"].notna()]
+    out = {"matches": int(len(df)), "simulated": int(len(usable)),
+           "model_fallback_share": round(float(1 - df["final"].map(lambda f: "1X2|1" in (f or {})).mean()), 3)
+           if len(df) else None}
+    picks = {slot: ([], []) for slot in GATE_SLOTS}
+    for _, r in usable.iterrows():
+        for t in select_tips(r.to_dict(), {}):
+            if t["slot"] in picks:
+                picks[t["slot"]][0].append(t["p"])
+                picks[t["slot"]][1].append(won(t["legs"], int(r.hg), int(r.ag)))
+    out["slot_calibration"] = {}
+    for slot, (p, hit) in picks.items():
+        if len(p) >= 30:
+            ece, _ = calibration(np.array(p), np.array(hit, dtype=float))
+            out["slot_calibration"][slot] = {"n": len(p), "calibration_error": round(float(ece), 4),
+                                             "mean_p": round(float(np.mean(p)), 4), "hit_rate": round(float(np.mean(hit)), 4)}
+    sub = df.merge(closing, on="fixture_id", how="inner").dropna(subset=["price_h", "price_d", "price_a"])
+    if len(sub):
+        ys = outcome_1x2(sub.hg, sub.ag)
+        pc = np.vstack([demargin_power([r.price_h, r.price_d, r.price_a]) for r in sub.itertuples()])
+        ll_final = log_loss(np.vstack([_final_1x2(r) for _, r in sub.iterrows()]), ys)
+        out["closing"] = {"matches": int(len(sub)), "bookmakers": sub.bookmaker.value_counts().to_dict(),
+                          "log_loss_final": round(ll_final, 4), "log_loss_closing": round(log_loss(pc, ys), 4),
+                          "gap": round(ll_final - log_loss(pc, ys), 4)}
+    reasons = []
+    if out["matches"] < GATE_MIN_MATCHES:
+        reasons.append(f"only {out['matches']} matches (needs {GATE_MIN_MATCHES})")
+    if "closing" not in out:
+        reasons.append("no closing odds to compare against")
+    elif out["closing"]["gap"] > GATE_LOGLOSS:
+        reasons.append(f"log loss {out['closing']['gap']:+.4f} vs closing (limit +{GATE_LOGLOSS})")
+    for slot in GATE_SLOTS:
+        c = out["slot_calibration"].get(slot)
+        if c is None:
+            reasons.append(f"too few {slot} tips to judge calibration")
+        elif c["calibration_error"] > GATE_SLOT_CALIBRATION:
+            reasons.append(f"{slot} tips off by {c['calibration_error'] * 100:.1f}pp (limit 3pp)")
+    out["pass"] = not reasons
+    out["reasons"] = reasons
+    return out
+
+
+def league_evidence(conn, league_id: int) -> dict:
+    df = data.frozen_finished(conn)
+    df = df[df.league == str(league_id)]
+    closing = data.closing_1x2(conn, df.fixture_id.astype(int).tolist()) if len(df) else pd.DataFrame(
+        columns=["fixture_id", "bookmaker", "price_h", "price_d", "price_a"])
+    return league_gate(df, closing)

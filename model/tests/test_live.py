@@ -89,8 +89,9 @@ def finished(n=120, seed=5):
         rows.append({"fixture_id": i, "league": "10", "league_name": "League A",
                      "kickoff": NOW - pd.Timedelta(days=int(i % 20)), "hg": int(rng.poisson(1.5)),
                      "ag": int(rng.poisson(1.1)), "model_version": "dc-untuned", "settings_id": None,
-                     "p_home": p[0], "p_draw": p[1], "p_away": p[2],
-                     "probs": {"OU|O|2.5": 0.5, "BTTS|Y": 0.52}, "final": {}, "data_quality": 1.0, "fresh_days": 7})
+                     "p_home": p[0], "p_draw": p[1], "p_away": p[2], "lambda_home": 1.5, "lambda_away": 1.1,
+                     "rho": None, "probs": {"OU|O|2.5": 0.5, "BTTS|Y": 0.52}, "final": {}, "data_quality": 1.0,
+                     "fresh_days": 7})
     return pd.DataFrame(rows)
 
 
@@ -108,3 +109,43 @@ def test_shadow_report_structure():
     assert set(report["sections"]) == {"week", "to_date"}
     assert report["sections"]["to_date"]["by_league"]["League A"]["matches"] == 120
     assert "Free API plan" in report["caveat"]
+
+
+def gated_league(n, seed=8):
+    """n finished matches whose outcomes are drawn from the model itself, with matching closing prices."""
+    from engrebodds_model.dixon_coles import score_matrix
+    from engrebodds_model.markets import all_markets
+    rng = np.random.default_rng(seed)
+    rows, closing = [], []
+    for i in range(n):
+        lam, mu = rng.uniform(0.8, 2.2), rng.uniform(0.6, 1.6)
+        grid = score_matrix(lam, mu, -0.05)
+        cell = rng.choice(grid.size, p=grid.ravel())
+        hg, ag = np.unravel_index(cell, grid.shape)
+        probs = all_markets(grid)
+        rows.append({"fixture_id": i, "league": "10", "league_name": "League A", "kickoff": NOW - pd.Timedelta(days=1),
+                     "hg": int(hg), "ag": int(ag), "model_version": "v", "settings_id": None,
+                     "p_home": probs["1X2|1"], "p_draw": probs["1X2|X"], "p_away": probs["1X2|2"],
+                     "lambda_home": lam, "lambda_away": mu, "rho": -0.05, "probs": probs, "final": {},
+                     "data_quality": 1.0, "fresh_days": 3})
+        closing.append({"fixture_id": i, "bookmaker": "1xBet", "price_h": 0.95 / probs["1X2|1"],
+                        "price_d": 0.95 / probs["1X2|X"], "price_a": 0.95 / probs["1X2|2"]})
+    return pd.DataFrame(rows), pd.DataFrame(closing)
+
+
+def test_league_gate_passes_a_well_calibrated_league():
+    from engrebodds_model.live.shadow import league_gate
+    df, closing = gated_league(3000)
+    g = league_gate(df, closing)
+    assert g["pass"], g["reasons"]
+    assert set(g["slot_calibration"]) == {"result", "goals", "btts"}
+    assert abs(g["closing"]["gap"]) < 0.01 and g["model_fallback_share"] == 1.0   # no 1xBet finals stored
+
+
+def test_league_gate_explains_failures():
+    from engrebodds_model.live.shadow import league_gate
+    df, closing = gated_league(100)
+    g = league_gate(df, closing.iloc[0:0])
+    assert not g["pass"]
+    assert any("only 100 matches" in r for r in g["reasons"])
+    assert any("no closing odds" in r for r in g["reasons"])

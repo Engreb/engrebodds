@@ -35,12 +35,14 @@ on:
     # Both plans (no API requests): model predictions twice a day, shadow evaluation on Mondays.
     - cron: "57 5,17 * * *"       # predictions for the next 48 hours
     - cron: "29 7 * * 1"          # shadow evaluation of frozen predictions
+    - cron: "45 6,14 * * *"       # publish (or preview, while PUBLISH_TIPS is off) the publishing day's tips
   workflow_dispatch:
     inputs:
       jobs:
         description: >-
           Jobs to run: ingest jobs space-separated (e.g. sync_fixtures sync_odds), or one model command
-          prefixed "model:" (model:predict, model:shadow_report, model:tune_live, model:activate_settings 3)
+          prefixed "model:" (model:predict, model:publish --preview-all, model:league_tips 39 on,
+          model:league_priority 39 1, model:shadow_report, model:tune_live, model:activate_settings 3)
         required: true
         default: "sync_results sync_stats"
 
@@ -56,6 +58,7 @@ jobs:
     env:
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PUBLISH_TIPS: ${{ vars.PUBLISH_TIPS }}        # unset = preview only; "on" = publish to the track record
     steps:
       - uses: actions/checkout@v4
 
@@ -94,6 +97,7 @@ jobs:
               "17 */3 * * *" | "43 10 * * *") cmds="" ;;   # free-plan lines
               "57 5,17 * * *")       cmds="model:predict" ;;
               "29 7 * * 1")          cmds="model:shadow_report" ;;
+              "45 6,14 * * *")       cmds="model:publish" ;;
               *)                     cmds="$MANUAL_CMDS" ;;
             esac
           else
@@ -108,6 +112,7 @@ jobs:
               "31 4 * * *")          cmds="backfill --limit 100" ;;
               "57 5,17 * * *")       cmds="model:predict" ;;
               "29 7 * * 1")          cmds="model:shadow_report" ;;
+              "45 6,14 * * *")       cmds="model:publish" ;;
               *)                     cmds="$MANUAL_CMDS" ;;
             esac
           fi
