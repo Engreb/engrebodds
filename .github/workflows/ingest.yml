@@ -42,7 +42,7 @@ on:
         description: >-
           Jobs to run: ingest jobs space-separated (e.g. sync_fixtures sync_odds), or one model command
           prefixed "model:" (model:predict, model:publish --preview-all, model:league_tips 39 on,
-          model:league_priority 39 1, model:shadow_report, model:tune_live, model:activate_settings 3)
+          model:league_priority 39 1, model:shadow_report, model:proof, model:tune_live, model:activate_settings 3)
         required: true
         default: "sync_results sync_stats"
 
@@ -59,6 +59,11 @@ jobs:
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PUBLISH_TIPS: ${{ vars.PUBLISH_TIPS }}        # unset = preview only; "on" = publish to the track record
+      # Proof of record (optional until set up; see docs/deploy-checklist.md)
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+      RECORD_REPO: ${{ vars.RECORD_REPO }}
+      RECORD_REPO_TOKEN: ${{ secrets.RECORD_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -88,7 +93,7 @@ jobs:
           if [ "$PLAN" = "pro" ]; then
             floor=500
             case "$SCHEDULE" in
-              "7,22,37,52 * * * *")   cmds="sync_results;sync_stats" ;;
+              "7,22,37,52 * * * *")   cmds="sync_results;sync_stats;model:proof" ;;
               "20 3,15 * * *")       cmds="sync_fixtures" ;;
               "13 5,10,14,18 * * *") cmds="sync_odds" ;;
               "40 6 * * *")          cmds="sync_standings" ;;
@@ -104,7 +109,7 @@ jobs:
             floor=30
             case "$SCHEDULE" in
               "7,22,37,52 * * * *" | "13 5,10,14,18 * * *") cmds="" ;;   # Pro-plan lines
-              "17 */3 * * *")        cmds="sync_results" ;;
+              "17 */3 * * *")        cmds="sync_results;model:proof" ;;
               "43 10 * * *")         cmds="sync_odds --max-pages 2" ;;
               "20 3,15 * * *")       cmds="sync_fixtures --days-ahead 1" ;;
               "40 6 * * *")          cmds="" ;;   # the free plan can't read current-season tables

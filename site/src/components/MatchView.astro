@@ -1,0 +1,97 @@
+---
+// Match page body. Facts are always shown; the model's numbers and tips only when the visitor may see them.
+import Ko from "./Ko.astro";
+import LockChip from "./LockChip.astro";
+import Share from "./Share.astro";
+import TeamPanel from "./TeamPanel.astro";
+import { comboLabel, fairOdds, legLabel, odds, parseKey, pct, SLOT_LABEL } from "../lib/markets";
+import { watDate, watLong, watTime } from "../lib/day";
+import type { Facts } from "../lib/facts";
+import type { Fixture, Prediction, Tip } from "../lib/types";
+
+interface Props { fixture: Fixture; tips: Tip[]; prediction?: Prediction; facts: Facts }
+const { fixture: f, tips, prediction: pr, facts } = Astro.props;
+const locked = !pr && !tips.length && (f.tipCount > 0 || !f.finished);
+const MARKET_ROWS = ["1X2|1", "1X2|X", "1X2|2", "DC|1X", "DC|X2", "DC|12", "OU|O|1.5", "OU|O|2.5", "OU|U|2.5", "OU|O|3.5",
+  "BTTS|Y", "BTTS|N", "HT_1X2|1", "HT_1X2|X", "HT_1X2|2"];
+const resultClass = (r: string) => (r === "won" ? "won" : r === "lost" ? "lost" : "void");
+---
+<div class="stack">
+  <div>
+    <span class="eyebrow">{f.league.country} · {f.league.name} · {f.finished ? "Full time" : <>{watLong(f.kickoff)}, <Ko at={f.kickoff} long /></>}</span>
+    <h1 style="margin-top:4px">{f.home.name} vs {f.away.name} prediction</h1>
+    {f.score && <p class="lede">Final score <b>{f.score[0]}-{f.score[1]}</b></p>}
+  </div>
+
+  {pr ? (
+    <>
+      <div class="ledger" style="padding:14px"><div class="xg">
+        <div><b>{pr.lambdaHome.toFixed(2)}</b><span class="eyebrow">{f.home.name} xG</span></div>
+        <div><b>{f.score ? `${f.score[0]}-${f.score[1]}` : pr.csTop[0]?.score ?? "–"}</b><span class="eyebrow">{f.score ? "Final" : "Likely score"}</span></div>
+        <div><b>{pr.lambdaAway.toFixed(2)}</b><span class="eyebrow">{f.away.name} xG</span></div>
+      </div></div>
+
+      {tips.length > 0 && (
+        <section>
+          <h2 style="margin-bottom:10px">Our tips</h2>
+          <div class="ledger">
+            {tips.map((t) => (
+              <div class="mkt tipline">
+                <span><span class="eyebrow">{SLOT_LABEL[t.slot] ?? t.slot}{t.isBanker ? " · Banker" : ""}</span><br /><b>{comboLabel(t.legs)}</b></span>
+                <span class="pct">{pct(t.p)}</span>
+                <span class="o">
+                  {t.price != null
+                    ? <><span class="odds">{odds(t.price)}</span><small class="cap">1xBet{t.capturedAt ? `, ${watTime(t.capturedAt)}` : ""}</small></>
+                    : <><span class="odds fair">{odds(t.fair)}</span><small class="cap">no market price</small></>}
+                  {t.result !== "pending" && <span class={`res ${resultClass(t.result)}`}>{t.result}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 style="margin-bottom:10px">Every market</h2>
+        <div class="ledger">
+          <div class="mkt mkt-head"><span>Market</span><span class="pct">Prob.</span><span class="o">Fair odds</span></div>
+          {MARKET_ROWS.filter((k) => pr.probs[k] != null).map((k) => (
+            <div class="mkt"><span>{legLabel(parseKey(k))}</span><span class="pct">{pct(pr.probs[k])}</span><span class="o">{odds(fairOdds(pr.probs[k]))}</span></div>
+          ))}
+          {pr.csTop.slice(0, 5).map((c) => (
+            <div class="mkt"><span>Correct score {c.score}</span><span class="pct">{pct(c.p, 1)}</span><span class="o">{odds(fairOdds(c.p))}</span></div>
+          ))}
+        </div>
+        <p class="note">Fair odds are the model's probability turned into a price with a typical 6% bookmaker margin. If your bookmaker offers more, that may be value; check before you bet.</p>
+      </section>
+    </>
+  ) : locked ? (
+    <div class="slip"><div class="gate">
+      <LockChip href={null} />
+      <p>{f.tipCount > 0 ? "Our tips, probabilities and likely score for this match are for members." : "Tips for this match are published at 07:45 WAT on the day."} Every tip is graded on the public track record after full time.</p>
+      <a class="btn pri" href="/pricing">See plans</a>
+    </div></div>
+  ) : null}
+
+  <section class="stack" style="gap:14px">
+    <h2>Form and head-to-head</h2>
+    <p style="margin:0;max-width:72ch">{facts.preview}</p>
+    <div class="facts">
+      <TeamPanel name={f.home.name} t={facts.home} s={facts.table?.home} />
+      <TeamPanel name={f.away.name} t={facts.away} s={facts.table?.away} />
+    </div>
+    {!facts.table && <small class="muted">League table: updated when available.</small>}
+    {facts.h2h.length > 0 && (
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Match</th><th>Score</th></tr></thead>
+        <tbody>{facts.h2h.map((p) => (
+          <tr><td>{watDate(p.kickoff)}</td>
+            <td>{p.home ? `${f.home.name} v ${p.opponent}` : `${p.opponent} v ${f.home.name}`}</td>
+            <td>{p.home ? `${p.gf}-${p.ga}` : `${p.ga}-${p.gf}`}</td></tr>
+        ))}</tbody>
+      </table></div>
+    )}
+  </section>
+
+  <Share title={`${f.home.name} vs ${f.away.name} prediction`} path={`/predictions/${f.slug}`} />
+</div>

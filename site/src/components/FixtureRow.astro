@@ -1,0 +1,55 @@
+---
+// One match in a ledger. Visible content comes only from tips/predictions the visitor may see;
+// a locked match shows teams, kick-off and a Premium chip, never its 1X2 split or likely score.
+import Ko from "./Ko.astro";
+import LockChip from "./LockChip.astro";
+import { comboLabel, odds, pct } from "../lib/markets";
+import type { Fixture, Prediction, Tip } from "../lib/types";
+
+export interface Pick { label: string; p: number; fair: number; won?: boolean | null }
+interface Props { fixture: Fixture; tips?: Tip[]; prediction?: Prediction; pick?: Pick | null }
+const { fixture: f, tips = [], prediction: pr, pick } = Astro.props;
+const href = `/predictions/${f.slug}`;
+const headline = tips.find((t) => t.slot === "result") ?? tips[0];
+const locked = f.tipCount > 0 && !tips.length;
+const score = f.score ? `${f.score[0]}-${f.score[1]}` : pr?.csTop[0]?.score ?? "?–?";
+const resultClass = (r: string) => (r === "won" ? "won" : r === "lost" ? "lost" : "void");
+---
+<a class="fx" href={href}>
+  <span class="ko">{f.finished ? "FT" : f.status === "NS" || f.status === "TBD" ? <Ko at={f.kickoff} /> : f.status}</span>
+  <span class="tm"><span>{f.home.name}</span><span>{f.away.name}</span></span>
+  <span class="pw">
+    {pr ? (
+      <>
+        <span class="probs" aria-hidden="true">
+          <i class="h" style={`width:${(pr.probs["1X2|1"] ?? 0) * 100}%`}></i>
+          <i class="d" style={`width:${(pr.probs["1X2|X"] ?? 0) * 100}%`}></i>
+          <i class="a" style={`width:${(pr.probs["1X2|2"] ?? 0) * 100}%`}></i>
+        </span>
+        <span class="probs-l">
+          <span>1 {pct(pr.probs["1X2|1"] ?? 0)}</span><span>X {pct(pr.probs["1X2|X"] ?? 0)}</span><span>2 {pct(pr.probs["1X2|2"] ?? 0)}</span>
+        </span>
+      </>
+    ) : <span class="probs-l">{f.league.name}</span>}
+  </span>
+  <span class="sc" title={f.score ? "Final score" : "Most likely score"}>{score}</span>
+  <span class="tip">
+    {pick === null ? <LockChip href={null} /> : pick ? (
+      <>
+        <b>{pick.label}</b>
+        <span class="row tight"><span class="pct-s">{pct(pick.p)}</span><span class="odds" title="Fair odds">{odds(pick.fair)}</span>
+          {pick.won != null && <span class={`res ${pick.won ? "won" : "lost"}`}>{pick.won ? "Won" : "Lost"}</span>}</span>
+      </>
+    ) : headline ? (
+      <>
+        <b>{comboLabel(headline.legs)}</b>
+        <span class="row tight">
+          {headline.price != null
+            ? <span class="odds" title="1xBet price">{odds(headline.price)}</span>
+            : <span class="odds fair" title="Fair odds (no market price)">{odds(headline.fair)}</span>}
+          {headline.result !== "pending" && <span class={`res ${resultClass(headline.result)}`}>{headline.result}</span>}
+        </span>
+      </>
+    ) : locked ? <LockChip href={null} /> : <span class="pct-s">No tip</span>}
+  </span>
+</a>

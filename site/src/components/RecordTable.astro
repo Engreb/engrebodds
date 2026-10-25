@@ -1,0 +1,24 @@
+---
+// Graded tips: odds, probability, score, result and profit at 1 unit. "No market price" tips count in hit rate only.
+import { comboLabel, odds, parseText, pct } from "../lib/markets";
+import { watDate } from "../lib/day";
+import type { RecordRow } from "../lib/record";
+interface Props { rows: RecordRow[]; empty?: string }
+const { rows, empty = "No graded tips yet." } = Astro.props;
+const label = (d: string) => comboLabel(parseText(d));
+---
+{rows.length === 0 ? <div class="ledger"><div class="empty">{empty}</div></div> : (
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Match</th><th>Tip</th><th class="n">Odds</th><th class="n">Prob.</th><th>FT</th><th>Result</th><th class="n">P/L</th></tr></thead>
+    <tbody>{rows.map((r) => (
+      <tr>
+        <td>{watDate(r.kickoff_at)}</td><td>{r.home} v {r.away}</td><td>{label(r.description)}</td>
+        <td class="n">{r.ref_odds != null ? odds(r.ref_odds) : <span title="No market price: counts in hit rate only">–</span>}</td>
+        <td class="n">{pct(Number(r.model_prob))}</td>
+        <td>{r.home_90 != null ? `${r.home_90}-${r.away_90}` : "–"}</td>
+        <td><span class={`res ${r.result}`}>{r.result}</span></td>
+        <td class="n">{r.profit_units == null ? "–" : `${Number(r.profit_units) >= 0 ? "+" : ""}${Number(r.profit_units).toFixed(2)}`}</td>
+      </tr>
+    ))}</tbody>
+  </table></div>
+)}

@@ -1,0 +1,35 @@
+---
+import Base from "../layouts/Base.astro";
+import BankerCard from "../components/BankerCard.astro";
+import RecordTable from "../components/RecordTable.astro";
+import Share from "../components/Share.astro";
+import { watLong } from "../lib/day";
+import { recordRows, summaries } from "../lib/record";
+import { banker } from "../lib/site";
+import { getDay } from "../lib/source";
+
+const [day, record, recent] = await Promise.all([getDay(Astro), summaries(), recordRows({ bankers: true, limit: 10 })]);
+const b = banker(day);
+const s = record.find((r) => r.breakdown === "banker");
+---
+<Base title="Banker of the day: today's most confident football tip"
+      description="Today's banker: the single highest-probability priced tip on the card, with its odds and the full banker record. A banker is our most confident pick, never a certainty."
+      ogImage="/og/banker.png">
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>Banker of the day</h1>
+      <p class="lede">The highest-probability result or goals tip on today's card, priced at 1.30 or more on 1xBet. A banker is our most confident pick, not a certainty, and every one goes on the record.</p>
+    </div>
+    <div class="hero">
+      <BankerCard fixture={b.fixture} tip={b.tip} title="Today" />
+      <div class="stats" style="grid-template-columns:1fr 1fr">
+        <div class="stat"><div class="v">{s ? `${s.won}/${s.settled}` : "–"}</div><div class="k">Bankers won</div></div>
+        <div class="stat"><div class="v">{s?.hit_rate != null ? `${Math.round(s.hit_rate * 100)}%` : "–"}</div><div class="k">Hit rate{s?.avg_odds ? ` at ${s.avg_odds.toFixed(2)} average odds` : ""}</div></div>
+      </div>
+    </div>
+    <Share title="Banker of the day on Engrebodds" path="/banker-of-the-day" />
+    <section><h2 style="margin-bottom:12px">Recent bankers</h2>
+      <RecordTable rows={recent} empty="No graded bankers yet. The record starts on the first day tips are published." /></section>
+  </div>
+</Base>

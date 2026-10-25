@@ -40,3 +40,61 @@ jobs:
 
       - name: Model tests
         run: pytest -q model
+
+  # The website: type check, unit tests, the preview-mode build guard, then the leak test against a production
+  # build reading a seeded local Supabase (API included, so the site reads through row-level security as visitors do).
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+      - name: Preview mode can't be built for production
+        run: |
+          if SITE_PREVIEW=true npm run build > /dev/null 2>&1; then echo "::error::build succeeded with SITE_PREVIEW set"; exit 1; fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+
+      - name: Start Supabase (database and API only)
+        working-directory: .
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      # The seed needs room in today's publishing window for a match an hour ahead: not 05:25-06:45 UTC.
+      - name: Seed test data
+        id: seed
+        run: |
+          now=$(date -u +%H%M)
+          if [ "$now" -ge 0525 ] && [ "$now" -lt 0645 ]; then
+            echo "::warning::Leak test skipped: 05:25-06:45 UTC leaves no room in the publishing window for seeded matches"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f tests/seed.sql
+          fi
+
+      - name: Production build against the local database
+        if: steps.seed.outputs.skip != 'true'
+        run: |
+          npm run build -- --mode test
+          if grep -rq "tip_previews" dist; then echo "::error::preview code is in the production bundle"; exit 1; fi
+
+      - name: Leak test
+        if: steps.seed.outputs.skip != 'true'
+        run: |
+          npm run preview -- --mode test --port 4323 > preview.log 2>&1 &
+          for i in $(seq 30); do curl -sf -o /dev/null http://localhost:4323/predictions && break; sleep 2; done
+          npm run test:leak || { cat preview.log; exit 1; }

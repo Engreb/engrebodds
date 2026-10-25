@@ -1,0 +1,92 @@
+---
+import "../styles/global.css";
+import { previewOn } from "../lib/source";
+
+interface Props {
+  title: string;
+  description: string;
+  canonical?: string; // path; defaults to the current path
+  ogImage?: string;
+  jsonLd?: object;
+  noindex?: boolean;
+}
+const { title, description, canonical, ogImage, jsonLd, noindex } = Astro.props;
+const path = Astro.url.pathname;
+const canonicalUrl = new URL(canonical ?? path, Astro.site);
+const preview = previewOn();
+const member = Astro.cookies.get("eo_preview_member")?.value === "1";
+const fullTitle = title.includes("Engrebodds") ? title : `${title} | Engrebodds`;
+const nav = [
+  ["/predictions", "Predictions today"],
+  ["/banker-of-the-day", "Banker of the day"],
+  ["/2-odds-today", "2 odds"],
+  ["/5-odds-today", "5 odds"],
+  ["/10-odds-today", "10 odds"],
+  ["/bet-builder", "Bet builder"],
+  ["/leagues", "Leagues"],
+  ["/track-record", "Track record"],
+];
+---
+<!doctype html>
+<html lang="en-NG">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    {(noindex || preview) && <meta name="robots" content="noindex" />}
+    <link rel="preload" href="/fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0f3d2e" />
+    <meta property="og:site_name" content="Engrebodds" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    {ogImage && <meta property="og:image" content={new URL(ogImage, Astro.site)} />}
+    <meta name="twitter:card" content={ogImage ? "summary_large_image" : "summary"} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body>
+    {preview && (
+      <div class="proto"><div class="wrap">
+        <span><strong>Preview.</strong> Today's unpublished tip preview: not published, not on the track record.</span>
+        <label for="memberToggle"><input type="checkbox" id="memberToggle" checked={member} /> View as paying member</label>
+      </div></div>
+    )}
+    <header class="top"><div class="wrap">
+      <a class="logo" href="/">Engreb<b>odds</b></a>
+      <nav class="main" aria-label="Main">
+        {nav.map(([href, label]) => <a href={href} class={path === href ? "on" : undefined}>{label}</a>)}
+      </nav>
+      <a class="join-btn" href="/pricing">Go Premium</a>
+    </div></header>
+
+    <main class="wrap"><slot /></main>
+
+    <footer><div class="wrap">
+      <div class="row"><span class="age">18+</span><span>Predictions are statistical estimates, never guarantees. Engrebodds is not a bookmaker and is not affiliated with any bookmaker named on this site. Only stake what you can afford to lose.</span></div>
+      <div class="row foot-links">
+        <a href="/responsible-gambling">Responsible gambling</a> · <a href="/how-our-predictions-work">How our predictions work</a> ·
+        <a href="/track-record">Track record</a> · <a href="/pricing">Pricing</a> · <a href="/about">About</a> ·
+        <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+      </div>
+      <span>© {new Date().getFullYear()} Engrebodds</span>
+    </div></footer>
+
+    <script>
+      import "../scripts/localtime";
+      import "../scripts/copy";
+    </script>
+    {preview && (
+      <script>
+        const t = document.getElementById("memberToggle") as HTMLInputElement | null;
+        t?.addEventListener("change", () => {
+          document.cookie = `eo_preview_member=${t.checked ? 1 : 0}; path=/; SameSite=Lax`;
+          location.reload();
+        });
+      </script>
+    )}
+  </body>
+</html>

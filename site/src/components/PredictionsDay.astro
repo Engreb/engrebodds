@@ -1,0 +1,54 @@
+---
+// The predictions ledger for one publishing day, with day tabs, league filter and team search.
+import Ledger from "./Ledger.astro";
+import { dayLabel, shiftDate, watLong } from "../lib/day";
+import type { Day } from "../lib/types";
+
+interface Props { day: Day; league?: string | null }
+const { day, league } = Astro.props;
+const date = day.window.date;
+const tabs = [-1, 0, 1].map((o) => shiftDate(day.today, o));
+const leagues = [...new Map(day.fixtures.map((f) => [f.league.slug, f.league])).values()]
+  .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.name.localeCompare(b.name));
+const shown = league ? day.fixtures.filter((f) => f.league.slug === league) : day.fixtures;
+const href = (d: string) => (d === day.today ? "/predictions" : `/predictions/${d}`);
+const label = dayLabel(date, day.today);
+---
+<div class="stack">
+  <div>
+    <span class="eyebrow">{watLong(day.window.start)}</span>
+    <h1>Football predictions {label === "Today" || label === "Tomorrow" || label === "Yesterday" ? label.toLowerCase() : `for ${label}`}</h1>
+    <p class="lede">Win, draw and away probabilities, the most likely score and our headline tip for each fixture we cover. Tap a match for every market. The day runs from 07:45 WAT.</p>
+  </div>
+  <div>
+    <div class="toolbar">
+      <div class="seg">{tabs.map((d) => <a class={d === date ? "on" : undefined} href={href(d)}>{dayLabel(d, day.today)}</a>)}</div>
+      <form method="get" action={href(date)} class="row" style="gap:8px">
+        <select class="field" name="league" aria-label="League" onchange="this.form.submit()">
+          <option value="">All leagues</option>
+          {leagues.map((l) => <option value={l.slug} selected={l.slug === league}>{l.country} · {l.name}</option>)}
+        </select>
+        <noscript><button class="btn sec" type="submit">Filter</button></noscript>
+      </form>
+      <input class="field" id="team-search" type="search" placeholder="Search a team" aria-label="Search a team" />
+    </div>
+    <Ledger day={day} fixtures={shown} filterable
+            empty={day.fixtures.length ? "No fixtures match that filter." : "No covered fixtures for this day yet. Predictions run at 06:57 and 18:57 WAT."} />
+  </div>
+</div>
+<script>
+  // Team search filters the rendered list in the browser (no request, nothing extra cached).
+  const box = document.getElementById("team-search") as HTMLInputElement | null;
+  box?.addEventListener("input", () => {
+    const q = box.value.trim().toLowerCase();
+    for (const group of document.querySelectorAll<HTMLElement>("[data-ledger] .ledger")) {
+      let any = false;
+      for (const row of group.querySelectorAll<HTMLElement>(".fx")) {
+        const hit = !q || (row.querySelector(".tm")?.textContent ?? "").toLowerCase().includes(q);
+        row.hidden = !hit;
+        any ||= hit;
+      }
+      group.hidden = !any;
+    }
+  });
+</script>

@@ -1,0 +1,30 @@
+{
+  "name": "engrebodds-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "vitest run",
+    "dev:test": "astro dev --mode test --port 4322",
+    "test:leak": "node tests/leak.mjs"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.4.2",
+    "@cf-wasm/og": "^0.5.0",
+    "@supabase/supabase-js": "^2.118.0",
+    "astro": "^7.4.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  }
+}

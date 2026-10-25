@@ -1,0 +1,12 @@
+---
+import Base from "../../layouts/Base.astro";
+import PredictionsDay from "../../components/PredictionsDay.astro";
+import { getDay } from "../../lib/source";
+
+const day = await getDay(Astro);
+const league = Astro.url.searchParams.get("league");
+---
+<Base title="Football predictions today" canonical="/predictions"
+      description="Today's football predictions: win, draw and away probabilities, most likely score and tips for every match we cover, graded after full time.">
+  <PredictionsDay day={day} league={league} />
+</Base>

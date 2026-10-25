@@ -1,0 +1,24 @@
+{
+  // Cloudflare Worker for the site. Not deployed yet (Phase 4 runs locally; see docs/deploy-checklist.md).
+  "name": "engrebodds",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "vars": {
+    // Public values: the anon/publishable key only reads what row-level security allows.
+    "SUPABASE_URL": "https://xmgjrcgyuebsnvyvyqdx.supabase.co",
+    "SUPABASE_KEY": "sb_publishable_kmRxrwINDY_Bc5ZSewT-Qg_CLunn-GZ"
+  },
+  "env": {
+    // `astro dev --mode test` / `astro build --mode test`: the LOCAL Supabase (supabase start), seeded with
+    // tests/seed.sql. These are Supabase's standard local-demo values, not secrets.
+    "test": {
+      "vars": {
+        "SUPABASE_URL": "http://127.0.0.1:54321",
+        "SUPABASE_KEY": "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+      }
+    }
+  }
+}

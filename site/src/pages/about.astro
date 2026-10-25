@@ -1,0 +1,30 @@
+---
+import Base from "../layouts/Base.astro";
+import { CONTACT_EMAIL } from "../lib/site";
+---
+<Base title="About Engrebodds" description="Who runs Engrebodds, what we do and don't do, and how to contact us.">
+  <div class="stack prose" style="max-width:68ch">
+    <div>
+      <h1>About Engrebodds</h1>
+      <p class="lede">Football predictions built from a statistical model, published before kick-off and graded in public after full time.</p>
+    </div>
+    <section>
+      <h2>What we do</h2>
+      <p>Engrebodds publishes probabilities and tips for football matches, with a focus on what Nigerian and African fans follow. Every tip is published before the match, locked an hour before kick-off and graded after full time. Wins and losses both stay on the <a href="/track-record">track record</a>, which anyone can download.</p>
+    </section>
+    <section>
+      <h2>What we don't do</h2>
+      <ul class="prose-list">
+        <li>We are not a bookmaker and don't take bets.</li>
+        <li>We never place bets for you and never ask for your bookmaker login.</li>
+        <li>We are not affiliated with any bookmaker named on this site.</li>
+        <li>We never promise wins. Predictions are estimates; see <a href="/how-our-predictions-work">how they work</a>.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Contact</h2>
+      {CONTACT_EMAIL ? <p>Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
+                     : <p>Contact details will be published here before the site launches.</p>}
+    </section>
+  </div>
+</Base>

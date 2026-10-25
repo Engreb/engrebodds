@@ -1,0 +1,51 @@
+---
+// An accumulator: every leg, the combined 1xBet price with its capture time, and the chance all legs land.
+import LockChip from "./LockChip.astro";
+import Ko from "./Ko.astro";
+import { comboLabel, odds, pct } from "../lib/markets";
+import { watDay, watTime } from "../lib/day";
+import type { Slip } from "../lib/types";
+
+interface Props { slip?: Slip; title: string }
+const { slip: s, title } = Astro.props;
+const copyText = s?.selections
+  ? s.selections.map((l) => `${l.fixture ? `${l.fixture.home.name} v ${l.fixture.away.name}` : "Match"}: ${comboLabel(l.tip.legs)} @ ${odds(l.price)}`)
+      .join("\n") + `\nTotal ${odds(s.price ?? s.combinedOdds)} (1xBet)`
+  : "";
+---
+<div class="slip">
+  {!s ? (
+    <div class="empty">No slip today yet. Slips are built at 07:45 WAT from the day's priced tips, one selection per match.</div>
+  ) : (
+    <>
+      <div class="slip-top">
+        <div><span class="eyebrow">{title}</span><h3>{s.legs} selection{s.legs === 1 ? "" : "s"}{s.selections ? "" : " ready"}</h3></div>
+        <span class="tot">{odds(s.price ?? s.combinedOdds)}</span>
+      </div>
+      {s.selections ? (
+        <>
+          {s.selections.map((l) => (
+            <div class="slip-line">
+              <span class="m"><b>{l.fixture ? `${l.fixture.home.name} v ${l.fixture.away.name}` : "Match"}</b>
+                <small>{l.fixture?.league.name} · {l.fixture && <Ko at={l.fixture.kickoff} />} · {comboLabel(l.tip.legs)}
+                  {l.tip.capturedAt && <> · price at {watTime(l.tip.capturedAt)} WAT</>}</small></span>
+              <span class="pct">{pct(l.tip.p)}</span>
+              <span class="odds">{odds(l.price)}</span>
+            </div>
+          ))}
+          <div class="slip-foot">
+            <span>Chance every leg lands (model): <b style="color:var(--ink)">{pct(s.chance, 1)}</b></span>
+            {s.capturedAt && <span>1xBet prices as of {watDay(s.capturedAt)} {watTime(s.capturedAt)} WAT</span>}
+            <button class="btn sec" type="button" data-copy={copyText}>Copy selections</button>
+          </div>
+        </>
+      ) : (
+        <div class="gate">
+          <LockChip label="Premium slip" href={null} />
+          <p>Chance every leg lands: <b>{pct(s.chance, 1)}</b>. Selections are for members before kick-off, and every slip is graded on the track record after full time.</p>
+          <a class="btn pri" href="/pricing">See plans</a>
+        </div>
+      )}
+    </>
+  )}
+</div>

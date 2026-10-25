@@ -1,0 +1,48 @@
+---
+// One market across today's card: the strongest selection per match from the visible probabilities.
+// Locked matches show a Premium chip; finished ones show whether the pick won.
+import Base from "../layouts/Base.astro";
+import Ledger from "./Ledger.astro";
+import { watLong } from "../lib/day";
+import { bestOf, fairOdds, legLabel, MARKET_PAGES, parseKey, settles } from "../lib/markets";
+import { getDay } from "../lib/source";
+import type { Pick } from "./FixtureRow.astro";
+import type { Fixture } from "../lib/types";
+
+interface Props { page: keyof typeof MARKET_PAGES | "correct-score" }
+const { page } = Astro.props;
+const day = await getDay(Astro);
+const cfg = page === "correct-score"
+  ? { title: "Correct score predictions today", h1: "Correct score tips", keys: [] as readonly string[],
+      lede: "The single most likely scoreline for each match. Even the top score rarely passes 15%, so stake small." }
+  : MARKET_PAGES[page];
+
+function pickFor(f: Fixture): Pick | null {
+  const pr = day.predictions.get(f.id);
+  if (!pr) return null;
+  if (page === "correct-score") {
+    const top = pr.csTop[0];
+    if (!top) return null;
+    return { label: top.score, p: top.p, fair: fairOdds(top.p), won: f.score ? `${f.score[0]}-${f.score[1]}` === top.score : null };
+  }
+  const best = bestOf(pr.probs, cfg.keys);
+  if (!best) return null;
+  const leg = parseKey(best.key);
+  return { label: legLabel(leg), p: best.p, fair: fairOdds(best.p), won: f.score ? settles(leg, f.score) : null };
+}
+const others = [...Object.entries(MARKET_PAGES).map(([k, v]) => [k, v.h1.replace(" tips", "")]), ["correct-score", "Correct score"]];
+---
+<Base title={cfg.title} description={`${cfg.h1} for today's football: ${cfg.lede}`}>
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>{cfg.h1}</h1>
+      <p class="lede">{cfg.lede} Prices shown are fair odds from the model (with a typical 6% margin); compare with your bookmaker.</p>
+    </div>
+    <div class="chips" style="margin:0">
+      {others.map(([k, label]) => <a class={`chip${k === page ? " on" : ""}`} href={`/${k}`}>{label}</a>)}
+    </div>
+    <Ledger day={day} fixtures={day.fixtures} pickFor={pickFor}
+            empty="No covered fixtures today yet. Predictions run at 06:57 and 18:57 WAT." />
+  </div>
+</Base>

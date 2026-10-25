@@ -1,0 +1,7 @@
+---
+// Kick-off time: WAT on the server, rewritten to the visitor's zone by scripts/localtime.ts.
+import { watTime } from "../lib/day";
+interface Props { at: string; long?: boolean }
+const { at, long } = Astro.props;
+---
+<time datetime={at} data-ko={long ? "long" : "short"}>{watTime(at)}{long ? " WAT" : ""}</time>

@@ -1,0 +1,14 @@
+---
+import { naira, PLANS } from "../lib/site";
+---
+<div class="plans">
+  {PLANS.map((p) => (
+    <div class={`plan${p.best ? " best" : ""}`}>
+      {p.best && <span class="tag">Most popular</span>}
+      <h3>{p.name}</h3>
+      <div><div class="price">{naira(p.ngn)}</div><div class="per">{p.days} · {p.per}</div></div>
+      <ul><li>Every prediction before kick-off</li><li>Banker of the day</li><li>2, 5 and 10 odds slips</li><li>Full bet builder</li></ul>
+      <a class={`btn ${p.best ? "pri" : "sec"}`} href="/sign-up">Choose {p.name}</a>
+    </div>
+  ))}
+</div>

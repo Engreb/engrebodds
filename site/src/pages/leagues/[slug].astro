@@ -1,0 +1,28 @@
+---
+import Base from "../../layouts/Base.astro";
+import Ledger from "../../components/Ledger.astro";
+import { watLong } from "../../lib/day";
+import { publicClient } from "../../lib/db";
+import { leagueOf } from "../../lib/queries";
+import { getDay } from "../../lib/source";
+
+const slug = Astro.params.slug ?? "";
+const { data, error } = await publicClient().from("leagues").select("id, name, country, slug, display_order").neq("tier", "off");
+if (error) throw new Error(`leagues: ${error.message}`);
+const league = data.map(leagueOf).find((l) => l.slug === slug);
+if (!league) return new Response(null, { status: 404 });
+const day = await getDay(Astro);
+const fixtures = day.fixtures.filter((f) => f.league.id === league.id);
+---
+<Base title={`${league.name} predictions today (${league.country})`}
+      description={`${league.country} ${league.name} predictions and tips for today: probabilities, likely scores and graded results.`}>
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{league.country} · {watLong(day.window.start)}</span>
+      <h1>{league.name} predictions</h1>
+      <p class="lede">Today's {league.name} matches with win, draw and away probabilities and our tips. Every tip is graded on the <a href="/track-record">track record</a>.</p>
+    </div>
+    <Ledger day={day} fixtures={fixtures} empty={`No covered ${league.name} fixtures today.`} />
+    <p class="note"><a href="/predictions">All of today's predictions →</a></p>
+  </div>
+</Base>

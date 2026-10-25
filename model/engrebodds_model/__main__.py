@@ -1,6 +1,6 @@
 """Entry point: python -m engrebodds_model <command>
 
-Live (API-Football data in Supabase):  predict | shadow_report | publish [--preview-all] |
+Live (API-Football data in Supabase):  predict | shadow_report | publish [--preview-all] | proof |
                                        league_tips <api_league_id> on|off | league_priority <api_league_id> <n> |
                                        tune_live [--dry-run] | activate_settings <id>
 Research (football-data, private use):  backtest [--download] [--quick] [--improve] [--workers N]
@@ -22,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     act.add_argument("settings_id", type=int)
     pub = sub.add_parser("publish", help="publish (PUBLISH_TIPS=on) or preview the day's most-likely tips")
     pub.add_argument("--preview-all", action="store_true", help="preview every league, ignoring eligibility filters")
+    sub.add_parser("proof", help="post pending tip hashes, reveal graded runs (Telegram and the record repo)")
     lt = sub.add_parser("league_tips", help="switch a league's tips on (needs shadow evidence) or off")
     lt.add_argument("api_league_id", type=int)
     lt.add_argument("state", choices=["on", "off"])
@@ -40,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
         from engrebodds_model.live import predict, shadow
         (predict.run if args.command == "predict" else shadow.run)(load_settings(), **(
             {"days": args.days} if args.command == "shadow_report" else {}))
+    elif args.command == "proof":
+        from engrebodds_ingest.config import load_settings
+        from engrebodds_model.live import proof
+        proof.run(load_settings())
     elif args.command == "publish":
         from engrebodds_ingest.config import load_settings
         from engrebodds_model.live import publish

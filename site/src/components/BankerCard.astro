@@ -1,0 +1,32 @@
+---
+import Ko from "./Ko.astro";
+import { comboLabel, odds, pct } from "../lib/markets";
+import type { Fixture, Tip } from "../lib/types";
+
+interface Props { fixture?: Fixture; tip?: Tip; title?: string }
+const { fixture: f, tip, title = "Banker of the day" } = Astro.props;
+---
+<div class="banker">
+  <span class="eyebrow">{title}</span>
+  {f ? (
+    <>
+      <a class="teams" href={`/predictions/${f.slug}`}>{f.home.name}<br />vs {f.away.name}</a>
+      <div class="meta">{f.league.name} · Kick-off <Ko at={f.kickoff} long /></div>
+      {tip ? (
+        <>
+          <div class="pick"><strong>{comboLabel(tip.legs)}</strong>
+            <span class="odds" title={tip.price != null ? "1xBet price" : "Fair odds"}>{odds(tip.price ?? tip.fair)}</span></div>
+          <div>
+            <div class="row" style="justify-content:space-between;font-size:13px"><span>Model probability</span><b>{pct(tip.p)}</b></div>
+            <div class="bar"><i style={`width:${tip.p * 100}%`}></i></div>
+          </div>
+          {tip.result !== "pending" && <span class={`res ${tip.result}`}>{tip.result}</span>}
+        </>
+      ) : (
+        <div class="pick"><span>Pick hidden for members</span><a class="btn pri" href="/pricing">Unlock</a></div>
+      )}
+    </>
+  ) : (
+    <p class="meta">No banker today yet. Tips are published at 07:45 WAT; a banker needs a priced selection at 1.30 or more.</p>
+  )}
+</div>

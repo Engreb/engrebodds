@@ -1,0 +1,87 @@
+---
+import Base from "../layouts/Base.astro";
+import ProfitChart from "../components/ProfitChart.astro";
+import RecordTable from "../components/RecordTable.astro";
+import StatsRow from "../components/StatsRow.astro";
+import { SLOT_LABEL } from "../lib/markets";
+import { overall, recordRows, slipSummaries, summaries, type Summary } from "../lib/record";
+import { PROOF } from "../lib/site";
+
+const [sums, rows, slips] = await Promise.all([summaries(), recordRows(), slipSummaries()]);
+const all = overall(sums);
+const SLIP_LABEL: Record<string, string> = { odds2: "2 odds", odds5: "5 odds", odds10: "10 odds", low_risk: "Lowest-risk", bankers: "Bankers slip" };
+const order = ["product", "slot", "banker", "free", "league"];
+const breakdown = sums.filter((s) => s.breakdown !== "all")
+  .sort((a, b) => order.indexOf(a.breakdown) - order.indexOf(b.breakdown) || a.label.localeCompare(b.label));
+const label = (s: Summary) =>
+  s.breakdown === "slot" ? SLOT_LABEL[s.label] ?? s.label
+  : s.breakdown === "product" ? (s.label === "likely" ? "Most likely tips" : "Value tips")
+  : s.breakdown === "league" ? `League: ${s.label}` : s.label;
+const p = (v: number | null) => (v == null ? "–" : `${Math.round(v * 100)}%`);
+const sg = (v: number | null) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`);
+const num = (v: unknown) => (v == null ? null : Number(v));
+---
+<Base title="Track record: every tip, graded"
+      description="Every Engrebodds tip with its odds, result and profit or loss at 1 unit. Hit rate with average odds and ROI. Nothing is ever deleted; download it all as CSV.">
+  <div class="stack">
+    <div>
+      <span class="eyebrow">Graded after full time</span>
+      <h1>Track record</h1>
+      <p class="lede">Every published tip with its odds, result and profit or loss at a 1-unit stake. Nothing is deleted. Hit rate means little without the odds, so we show both. Units and ROI use 1xBet prices; tips with no market price (such as bet builder combos) count in hit rate only, and voids are left out.</p>
+    </div>
+    <StatsRow s={all} />
+    {all && all.no_market_price > 0 && (
+      <p class="note">{all.no_market_price} graded tip{all.no_market_price === 1 ? "" : "s"} had no market price: counted in hit rate, not in units or ROI.</p>
+    )}
+
+    <section><h2 style="margin-bottom:12px">Profit over time</h2><ProfitChart rows={rows} /></section>
+
+    <section>
+      <div class="sec-head"><h2>By tip type and league</h2></div>
+      {breakdown.length === 0 ? <div class="ledger"><div class="empty">Breakdowns appear once tips are graded.</div></div> : (
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Group</th><th class="n">Settled</th><th class="n">Won</th><th class="n">Hit rate</th><th class="n">Avg odds</th><th class="n">Units</th><th class="n">ROI</th></tr></thead>
+          <tbody>{breakdown.map((s) => (
+            <tr><td>{label(s)}</td><td class="n">{s.settled}</td><td class="n">{s.won}</td><td class="n">{p(s.hit_rate)}</td>
+              <td class="n">{s.avg_odds?.toFixed(2) ?? "–"}</td><td class="n">{sg(s.units)}</td>
+              <td class="n">{s.roi == null ? "–" : `${sg(s.roi * 100)}%`}</td></tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Slips</h2></div>
+      {slips.length === 0 ? <div class="ledger"><div class="empty">No graded slips yet.</div></div> : (
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Slip</th><th class="n">Settled</th><th class="n">Won</th><th class="n">Avg price</th><th class="n">Avg chance we gave</th><th class="n">Units</th><th class="n">ROI</th></tr></thead>
+          <tbody>{slips.map((s) => (
+            <tr><td>{SLIP_LABEL[s.kind] ?? s.kind}</td><td class="n">{s.settled}</td><td class="n">{s.won}</td>
+              <td class="n">{num(s.avg_price)?.toFixed(2) ?? "–"}</td><td class="n">{p(num(s.avg_chance_all_land))}</td>
+              <td class="n">{sg(num(s.units))}</td><td class="n">{s.roi == null ? "–" : `${sg(Number(s.roi) * 100)}%`}</td></tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Every tip</h2>
+        <div class="row">
+          <a class="btn sec" href="/track-record.csv" download>Download tips (CSV)</a>
+          <a class="btn sec" href="/track-record-slips.csv" download>Download slips (CSV)</a>
+        </div>
+      </div>
+      <RecordTable rows={rows} empty="No graded tips yet. The public record starts on the first day tips are published, and nothing is ever deleted from it." />
+    </section>
+    <section class="stack prose" style="gap:8px;max-width:72ch">
+      <h2>Check that nothing was changed</h2>
+      <p>Each time tips are published, a SHA-256 fingerprint of the full list is posted publicly before the first match. After the last match is graded, the list itself is posted. Anyone can compute the list's SHA-256 (for example with <code>sha256sum</code>) and compare it with the fingerprint posted hours earlier: if a single tip had been changed, the two would not match.</p>
+      {PROOF.telegram || PROOF.repo ? (
+        <p>Fingerprints and lists: {PROOF.telegram && <a href={PROOF.telegram} rel="noopener">our Telegram channel</a>}
+          {PROOF.telegram && PROOF.repo && " and "}{PROOF.repo && <a href={PROOF.repo} rel="noopener">the public record on GitHub</a>}.</p>
+      ) : (
+        <p>The channel and archive links appear here when publishing starts.</p>
+      )}
+    </section>
+  </div>
+</Base>

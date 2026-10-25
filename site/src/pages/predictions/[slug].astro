@@ -1,0 +1,63 @@
+---
+// /predictions/2026-10-25 (a day) or /predictions/arsenal-vs-chelsea-2026-10-25 (a match).
+import Base from "../../layouts/Base.astro";
+import MatchView from "../../components/MatchView.astro";
+import PredictionsDay from "../../components/PredictionsDay.astro";
+import { isDate, shiftDate, watLong } from "../../lib/day";
+import { publicClient } from "../../lib/db";
+import { matchFacts } from "../../lib/facts";
+import { parseMatchSlug } from "../../lib/slug";
+import { getDay } from "../../lib/source";
+import type { Day, Fixture } from "../../lib/types";
+
+const slug = Astro.params.slug ?? "";
+
+let day: Day | undefined;
+if (isDate(slug)) {
+  day = await getDay(Astro, slug);
+  if (slug === day.today) return Astro.redirect("/predictions", 301);
+}
+
+let match: { day: Day; fixture: Fixture } | undefined;
+if (!isDate(slug)) {
+  const parts = parseMatchSlug(slug);
+  if (!parts) return new Response(null, { status: 404 });
+  // A match dated D (WAT) belongs to publishing day D, or D-1 if it kicks off before 07:45 WAT.
+  for (const date of [parts.date, shiftDate(parts.date, -1)]) {
+    const d = await getDay(Astro, date);
+    const f = d.fixtures.find((x) => (parts.id ? x.id === parts.id : x.slug === slug || x.slug.startsWith(`${slug}-`)));
+    if (f) { match = { day: d, fixture: f }; break; }
+  }
+  if (!match) return new Response(null, { status: 404 });
+  if (match.fixture.slug !== slug && !parts.id) return Astro.redirect(`/predictions/${match.fixture.slug}`, 301);
+}
+
+const facts = match ? await matchFacts(publicClient(), match.fixture) : undefined;
+const f = match?.fixture;
+const jsonLd = f && {
+  "@context": "https://schema.org",
+  "@type": "SportsEvent",
+  name: `${f.home.name} vs ${f.away.name}`,
+  sport: "Soccer",
+  startDate: f.kickoff,
+  eventStatus: f.status === "PST" ? "https://schema.org/EventPostponed"
+    : f.status === "CANC" ? "https://schema.org/EventCancelled" : "https://schema.org/EventScheduled",
+  homeTeam: { "@type": "SportsTeam", name: f.home.name },
+  awayTeam: { "@type": "SportsTeam", name: f.away.name },
+  superEvent: { "@type": "SportsEvent", name: `${f.league.country} ${f.league.name}` },
+  location: { "@type": "Place", name: `${f.home.name} home ground` },
+};
+---
+{day && (
+  <Base title={`Football predictions for ${watLong(day.window.start)}`}
+        description={`Football predictions and tips for ${watLong(day.window.start)}: probabilities, likely scores and graded results.`}>
+    <PredictionsDay day={day} league={Astro.url.searchParams.get("league")} />
+  </Base>
+)}
+{match && f && facts && (
+  <Base title={`${f.home.name} vs ${f.away.name} prediction, tips and preview (${f.date})`}
+        description={`${f.home.name} vs ${f.away.name}, ${f.league.name}, ${watLong(f.kickoff)}: recent form, head-to-head and our graded prediction.`}
+        jsonLd={jsonLd}>
+    <MatchView fixture={f} tips={match.day.tips.get(f.id) ?? []} prediction={match.day.predictions.get(f.id)} facts={facts} />
+  </Base>
+)}

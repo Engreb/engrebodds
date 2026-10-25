@@ -1,0 +1,8 @@
+---
+// WhatsApp share: the page link and title only, never locked selections.
+interface Props { title: string; path: string }
+const { title, path } = Astro.props;
+const url = new URL(path, Astro.site).toString();
+const wa = `https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`;
+---
+<div class="row"><a class="btn sec share" href={wa} target="_blank" rel="noopener">Share on WhatsApp</a></div>

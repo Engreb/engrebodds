@@ -1,0 +1,29 @@
+---
+// Fixtures grouped by league, in league-priority order, then kick-off.
+import FixtureRow, { type Pick } from "./FixtureRow.astro";
+import type { Day, Fixture } from "../lib/types";
+
+interface Props { day: Day; fixtures: Fixture[]; pickFor?: (f: Fixture) => Pick | null; empty?: string; filterable?: boolean }
+const { day, fixtures, pickFor, empty = "No fixtures match those filters.", filterable = false } = Astro.props;
+const groups = new Map<number, Fixture[]>();
+for (const f of fixtures) groups.set(f.league.id, [...(groups.get(f.league.id) ?? []), f]);
+const ordered = [...groups.values()].sort((a, b) =>
+  (a[0].league.order ?? 9999) - (b[0].league.order ?? 9999) || a[0].kickoff.localeCompare(b[0].kickoff));
+---
+{fixtures.length === 0 ? (
+  <div class="ledger"><div class="empty">{empty}</div></div>
+) : (
+  <>
+    <div class="col-head"><span>KO</span><span>Match</span><span>1 · X · 2</span><span>Score</span><span>Tip</span></div>
+    <div class="stack" style="gap:10px" data-ledger={filterable ? "" : undefined}>
+      {ordered.map((list) => (
+        <div class="ledger" data-league={list[0].league.slug}>
+          <div class="lg-head"><span class="flag">{list[0].league.country.slice(0, 3).toUpperCase()}</span>{list[0].league.name}</div>
+          {list.map((f) => (
+            <FixtureRow fixture={f} tips={day.tips.get(f.id)} prediction={day.predictions.get(f.id)} pick={pickFor ? pickFor(f) : undefined} />
+          ))}
+        </div>
+      ))}
+    </div>
+  </>
+)}

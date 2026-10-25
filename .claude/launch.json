@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "site",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "4321"
+      ],
+      "port": 4321
+    },
+    {
+      "name": "site-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "site",
+        "run",
+        "dev:test"
+      ],
+      "port": 4322
+    }
+  ]
+}

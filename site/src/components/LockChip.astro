@@ -1,0 +1,7 @@
+---
+const lock = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/></svg>';
+interface Props { label?: string; href?: string | null }
+const { label = "Premium", href = "/pricing" } = Astro.props;
+---
+{href ? <a class="lock" href={href}><Fragment set:html={lock} />{label}</a>
+      : <span class="lock"><Fragment set:html={lock} />{label}</span>}

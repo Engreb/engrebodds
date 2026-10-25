@@ -1,0 +1,36 @@
+---
+import Base from "../../layouts/Base.astro";
+import { watLong } from "../../lib/day";
+import { getDay } from "../../lib/source";
+import type { League } from "../../lib/types";
+
+const day = await getDay(Astro);
+const counts = new Map<number, { league: League; n: number }>();
+for (const f of day.fixtures) {
+  const c = counts.get(f.league.id) ?? { league: f.league, n: 0 };
+  c.n++;
+  counts.set(f.league.id, c);
+}
+const leagues = [...counts.values()].sort((a, b) =>
+  (a.league.order ?? 9999) - (b.league.order ?? 9999) || a.league.country.localeCompare(b.league.country) || a.league.name.localeCompare(b.league.name));
+---
+<Base title="Football leagues we cover" description="Leagues with Engrebodds predictions today. Pick one to see its fixtures, probabilities and graded tips.">
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>Leagues</h1>
+      <p class="lede">Competitions with predictions today. Pick one to see its matches. We only cover a league once the model has enough of its history; continental competitions and cup ties between leagues are left out.</p>
+    </div>
+    {leagues.length === 0 ? <div class="ledger"><div class="empty">No covered fixtures today yet.</div></div> : (
+      <div class="grid">
+        {leagues.map(({ league, n }) => (
+          <a class="card" href={`/leagues/${league.slug}`}>
+            <span class="eyebrow">{league.country}</span>
+            <h3>{league.name}</h3>
+            <small>{n} fixture{n === 1 ? "" : "s"} today</small>
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+</Base>

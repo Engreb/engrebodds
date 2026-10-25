@@ -1,0 +1,17 @@
+---
+// Hit rate is shown with average odds, units and ROI, never alone. Units and ROI cover priced tips only.
+import type { Summary } from "../lib/record";
+interface Props { s?: Summary }
+const { s } = Astro.props;
+const signed = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}`;
+---
+{!s || s.settled === 0 ? (
+  <div class="ledger"><div class="empty">No graded tips yet. The public record starts on the first day tips are published, and nothing is ever deleted from it.</div></div>
+) : (
+  <div class="stats">
+    <div class="stat"><div class="v">{((s.hit_rate ?? 0) * 100).toFixed(0)}%</div><div class="k">Hit rate ({s.won} of {s.settled})</div></div>
+    <div class="stat"><div class="v">{s.avg_odds?.toFixed(2) ?? "–"}</div><div class="k">Average odds ({s.priced} priced)</div></div>
+    <div class="stat"><div class={`v ${(s.units ?? 0) >= 0 ? "pos" : "neg"}`}>{signed(s.units ?? 0)}u</div><div class="k">Profit at 1 unit a tip</div></div>
+    <div class="stat"><div class={`v ${(s.roi ?? 0) >= 0 ? "pos" : "neg"}`}>{signed((s.roi ?? 0) * 100)}%</div><div class="k">Return on stakes (ROI)</div></div>
+  </div>
+)}

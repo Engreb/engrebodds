@@ -1,0 +1,37 @@
+---
+// "SportyBet predictions today" and friends: today's free tips and 5 odds slip as a selections list to copy.
+// We store 1xBet prices only, so prices are labelled 1xBet. No booking codes and no affiliate links (CLAUDE.md).
+import Base from "../../layouts/Base.astro";
+import Ledger from "../../components/Ledger.astro";
+import SlipCard from "../../components/SlipCard.astro";
+import { watLong } from "../../lib/day";
+import { BOOKMAKERS, slipOf } from "../../lib/site";
+import { getDay } from "../../lib/source";
+
+const bk = BOOKMAKERS.find((b) => b.slug === Astro.params.slug);
+if (!bk) return new Response(null, { status: 404 });
+const day = await getDay(Astro);
+const free = day.fixtures.filter((f) => f.hasFree);
+---
+<Base title={`${bk.name} predictions today`}
+      description={`Football predictions to play on ${bk.name} today: free tips and a 5 odds slip as a list you can copy. Check ${bk.name}'s own odds before you bet.`}>
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>{bk.name} predictions today</h1>
+      <p class="lede">Today's tips, ready to enter on {bk.name}. Copy the selections and add them to your {bk.name} betslip yourself. The prices we show are from 1xBet; {bk.name}'s odds will differ slightly, so check them before you place.</p>
+    </div>
+    <div class="chips" style="margin:0">
+      {BOOKMAKERS.map((b) => <a class={`chip${b.slug === bk.slug ? " on" : ""}`} href={`/bookmakers/${b.slug}`}>{b.name}</a>)}
+    </div>
+    <section>
+      <h2 style="margin-bottom:12px">Today's 5 odds slip</h2>
+      <SlipCard slip={slipOf(day, "odds5")} title={`For ${bk.name} · 5 odds`} />
+    </section>
+    <section>
+      <h2 style="margin-bottom:12px">Free tips</h2>
+      <Ledger day={day} fixtures={free} empty="Today's free tips are published at 07:45 WAT." />
+    </section>
+    <p class="note">Engrebodds is not affiliated with {bk.name} or any bookmaker. We never place bets for you or ask for your bookmaker login. Booking codes need an agreement with each bookmaker; until then, copy the selections list.</p>
+  </div>
+</Base>

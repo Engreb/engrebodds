@@ -17,6 +17,7 @@ from psycopg.types.json import Jsonb
 
 from engrebodds_ingest.config import Settings
 from engrebodds_ingest.db import job_run
+from engrebodds_model.live import proof
 from engrebodds_model.live import settings as live_settings
 from engrebodds_model.live.tips import Price, build_slips, choose_banker, choose_free, publishing_window, select_tips
 
@@ -114,7 +115,9 @@ def run(settings: Settings, preview_all: bool = False, now: datetime | None = No
             ctx.rows += _publish(ctx.conn, p, now, ctx.notes)
         else:
             ctx.rows += _preview(ctx.conn, p, ctx.notes)
-
+    if mode == "on":
+        # The tips are committed now: post the run's hash publicly (retried by the proof job until kick-off).
+        proof.run(settings)
 
 def _free_and_banker(conn, p: dict, mode_on: bool) -> tuple[set, dict | None]:
     start, end = p["window"]
@@ -178,8 +181,10 @@ def _publish(conn, p: dict, now: datetime, notes: list) -> int:
     slips_made = 0
     if not conn.execute("select exists (select 1 from public.slips where slip_date = %s)", (start.date(),)).fetchone()[0]:
         slips_made = _publish_slips(conn, p, now)
+    run_proof = proof.record_run(conn, start.date())
     notes.append(f"published {written} tips on {len(p['fixtures'])} fixtures; {len(free)} free fixtures; "
-                 f"banker {'set' if banker else 'unchanged'}; {slips_made} slips")
+                 f"banker {'set' if banker else 'unchanged'}; {slips_made} slips"
+                 + (f"; proof sha256 {run_proof['sha256'][:12]}…" if run_proof else ""))
     return written + slips_made
 
 

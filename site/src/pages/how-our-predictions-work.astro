@@ -1,0 +1,48 @@
+---
+import Base from "../layouts/Base.astro";
+---
+<Base title="How our predictions work" description="The goals model behind Engrebodds, where our probabilities come from, how tips are chosen and graded, and why hit rate means nothing without the odds.">
+  <div class="stack prose" style="max-width:72ch">
+    <div>
+      <h1>How our predictions work</h1>
+      <p class="lede">Plainly: what the numbers are, where they come from, and what they can't do.</p>
+    </div>
+
+    <section>
+      <h2>The model</h2>
+      <p>Every probability starts with a goals model (Dixon and Coles, 1997). From each team's recent results it estimates how many goals each side is likely to score, giving more weight to recent matches. Those expected goals give a probability for every scoreline, and from the scorelines come win, draw and away, double chance, over/under, GG/NG and correct score.</p>
+      <p>The model only covers a league once it has enough of that league's history. It leaves out continental competitions and cup ties between teams from different leagues, where it has no common scale.</p>
+    </section>
+
+    <section>
+      <h2>Where a probability comes from</h2>
+      <p>For win/draw/away and over/under 2.5, when 1xBet has a price we use the probability implied by that price, with the bookmaker's margin removed (the power method, which takes more margin off long shots than favourites). Betting markets are hard to beat, so where a price exists we trust it. Where there is none, we use the model. Every tip records which source it used.</p>
+    </section>
+
+    <section>
+      <h2>How tips are chosen</h2>
+      <p>For each match we publish up to four tips: the most likely result, the most likely over/under line priced at 1.30 or more, the more likely of GG or NG, and a bet builder combination (result or double chance with an over/under line) at fair odds of 1.50 or more. Tips are published at 07:45 WAT and locked one hour before kick-off. They are never edited or deleted.</p>
+      <p>The banker is the day's highest-probability result or goals tip priced at 1.30 or more. Slips combine the day's most likely priced tips, one per match, until they reach their target price; each shows the model's chance that every leg lands.</p>
+    </section>
+
+    <section>
+      <h2>Fair odds and market prices</h2>
+      <p>Fair odds are our probability turned into a price with a typical 6% bookmaker margin. The price on the track record is the 1xBet price at the time we published, with the time shown. Tips with no market price (bet builder combinations, for example) count in hit rate but not in profit or ROI.</p>
+    </section>
+
+    <section>
+      <h2>Why hit rate alone means nothing</h2>
+      <p>Picking favourites at 1.20 can win 80% of the time and still lose money. That's why the track record always shows hit rate next to average odds, profit in units and return on stakes, and why nothing is ever removed from it.</p>
+    </section>
+
+    <section>
+      <h2>Which leagues get tips</h2>
+      <p>Predictions run for every covered league, but tips are switched on league by league, only after the model has been checked on at least 150 of that league's matches: its probabilities must be close to the closing market's, and the tips it would have published must be well calibrated (a 70% pick must land about 70% of the time).</p>
+    </section>
+
+    <section>
+      <h2>What it can't do</h2>
+      <p>No model knows about a late injury, a rotated squad or a red card. Probabilities are estimates, and even a 90% pick loses one time in ten. Bet only what you can afford to lose; see <a href="/responsible-gambling">responsible gambling</a>.</p>
+    </section>
+  </div>
+</Base>

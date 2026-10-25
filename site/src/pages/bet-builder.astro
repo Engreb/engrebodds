@@ -1,0 +1,54 @@
+---
+// Members choose a target price, a minimum probability and markets; the builder picks one selection per match.
+// Probabilities are embedded only for members (none exist until Phase 5; in local preview, the member toggle).
+import Base from "../layouts/Base.astro";
+import LockChip from "../components/LockChip.astro";
+import { watLong, watTime } from "../lib/day";
+import { getDay } from "../lib/source";
+
+const KEYS = ["1X2|1", "1X2|X", "1X2|2", "DC|1X", "DC|X2", "DC|12", "OU|O|1.5", "OU|O|2.5", "OU|U|2.5", "BTTS|Y", "BTTS|N"];
+const CHOICES: [string, string, boolean][] = [
+  ["1X2|1", "Home", true], ["1X2|X", "Draw", false], ["1X2|2", "Away", true], ["DC|1X", "1X", true], ["DC|X2", "X2", true],
+  ["DC|12", "12", true], ["OU|O|1.5", "Over 1.5", true], ["OU|O|2.5", "Over 2.5", true], ["OU|U|2.5", "Under 2.5", false],
+  ["BTTS|Y", "GG", true], ["BTTS|N", "NG", false],
+];
+const day = await getDay(Astro);
+const data = day.member
+  ? day.fixtures.filter((f) => !f.finished && day.predictions.has(f.id)).map((f) => ({
+      id: f.id, match: `${f.home.name} v ${f.away.name}`, meta: `${f.league.name} · ${watTime(f.kickoff)}`,
+      p: Object.fromEntries(KEYS.map((k) => [k, day.predictions.get(f.id)!.probs[k]]).filter(([, v]) => v != null)),
+    }))
+  : null;
+---
+<Base title="Bet builder: build your own accumulator" description="Set the total odds you want and how much risk you'll accept; the builder picks one selection per match from today's card, most likely first.">
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>Bet builder</h1>
+      <p class="lede">Set the total odds you want and how much risk you'll accept. The builder picks one selection per match from today's card, starting with the most likely, and shows the chance that every leg lands.</p>
+    </div>
+    {data ? (
+      <div class="builder">
+        <form class="panel" id="bform">
+          <label for="bt">Target odds <input class="field" type="number" id="bt" min="1.5" max="100" step="0.5" value="5" /></label>
+          <label for="bp">Minimum probability per selection: <span id="bpv">65%</span><input type="range" id="bp" min="50" max="90" value="65" /></label>
+          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">Markets</div>
+            <div class="checks">{CHOICES.map(([k, label, on]) => (
+              <label><input type="checkbox" value={k} checked={on} /> {label}</label>
+            ))}</div>
+          </div>
+        </form>
+        <div id="bout"></div>
+        <script type="application/json" id="bdata" set:html={JSON.stringify(data)} />
+      </div>
+    ) : (
+      <div class="slip"><div class="gate">
+        <LockChip label="Members" href={null} />
+        <p>The bet builder uses every match's full probabilities, so it's part of Premium (opening August 2027). Until then, today's <a href="/2-odds-today">2</a>, <a href="/5-odds-today">5</a> and <a href="/10-odds-today">10 odds</a> slips show how it works.</p>
+        <a class="btn pri" href="/pricing">See plans</a>
+      </div></div>
+    )}
+    <p class="note">Builder prices are the model's fair odds (6% margin), not a bookmaker's. Check your bookmaker's price for each selection before you place.</p>
+  </div>
+</Base>
+{data && <script>import "../scripts/builder";</script>}

@@ -1,0 +1,17 @@
+---
+import { watDate } from "../lib/day";
+import { ordinal, type Played, type Standing, type TeamFacts } from "../lib/facts";
+interface Props { name: string; t: TeamFacts; s?: Standing }
+const { name, t, s } = Astro.props;
+const title = (p: Played) => `${p.outcome} ${p.gf}-${p.ga} ${p.home ? "v" : "at"} ${p.opponent}, ${watDate(p.kickoff)}`;
+---
+<div class="panel">
+  <h3>{name}</h3>
+  <div class="form" aria-label="Last five results, most recent first">
+    {t.form.length ? t.form.map((p) => <span class={`fm ${p.outcome}`} title={title(p)}>{p.outcome}</span>)
+                   : <small>No recent results on record</small>}
+  </div>
+  {t.gfAvg != null && <small>Scores {t.gfAvg}, concedes {t.gaAvg} a game (last {t.played.length})</small>}
+  {t.form[0] && <small>Latest result on record: {watDate(t.form[0].kickoff)}</small>}
+  {s && <small>{ordinal(s.rank)} in the table · {s.points} pts from {s.played}</small>}
+</div>

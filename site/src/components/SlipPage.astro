@@ -1,0 +1,42 @@
+---
+// A daily slip page: today's slip and that slip kind's record (hit rate with average price and units).
+import Base from "../layouts/Base.astro";
+import Share from "./Share.astro";
+import SlipCard from "./SlipCard.astro";
+import { watLong } from "../lib/day";
+import { slipSummaries } from "../lib/record";
+import { slipOf } from "../lib/site";
+import { getDay } from "../lib/source";
+
+interface Props { kind: string; path: string; title: string; description: string; h1: string; card: string }
+const { kind, path, title, description, h1, card } = Astro.props;
+const [day, record] = await Promise.all([getDay(Astro), slipSummaries()]);
+const slip = slipOf(day, kind);
+const r = record.find((x) => x.kind === kind);
+const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}`;
+---
+<Base title={title} description={description} ogImage={`/og/slip/${kind}.png`}>
+  <div class="stack">
+    <div>
+      <span class="eyebrow">{watLong(day.window.start)}</span>
+      <h1>{h1}</h1>
+      <slot />
+    </div>
+    <SlipCard slip={slip} title={card} />
+    <Share title={`${h1} on Engrebodds`} path={path} />
+    <section>
+      <h2 style="margin-bottom:12px">How this slip has done</h2>
+      {r && r.settled > 0 ? (
+        <div class="stats">
+          <div class="stat"><div class="v">{r.won}/{r.settled}</div><div class="k">Slips won</div></div>
+          <div class="stat"><div class="v">{r.avg_price != null ? Number(r.avg_price).toFixed(2) : "–"}</div><div class="k">Average price</div></div>
+          <div class="stat"><div class="v">{r.avg_chance_all_land != null ? `${Math.round(Number(r.avg_chance_all_land) * 100)}%` : "–"}</div><div class="k">Average chance we gave</div></div>
+          <div class="stat"><div class={`v ${Number(r.units ?? 0) >= 0 ? "pos" : "neg"}`}>{signed(Number(r.units ?? 0))}u</div><div class="k">Profit at 1 unit a slip</div></div>
+        </div>
+      ) : (
+        <div class="ledger"><div class="empty">No graded slips yet. Every slip goes on the track record after its last match.</div></div>
+      )}
+    </section>
+    <p class="note">Want a different target? The <a href="/bet-builder">bet builder</a> lets members set their own odds, markets and risk level.</p>
+  </div>
+</Base>

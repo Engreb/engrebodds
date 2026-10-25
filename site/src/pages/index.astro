@@ -1,0 +1,54 @@
+---
+import Base from "../layouts/Base.astro";
+import BankerCard from "../components/BankerCard.astro";
+import Ledger from "../components/Ledger.astro";
+import Plans from "../components/Plans.astro";
+import StatsRow from "../components/StatsRow.astro";
+import { watLong } from "../lib/day";
+import { overall, summaries } from "../lib/record";
+import { banker, BOOKMAKERS } from "../lib/site";
+import { getDay } from "../lib/source";
+
+const [day, record] = await Promise.all([getDay(Astro), summaries()]);
+const b = banker(day);
+const free = day.fixtures.filter((f) => f.hasFree);
+const chips = [
+  ["/2-odds-today", "2 odds today"], ["/5-odds-today", "5 odds today"], ["/10-odds-today", "10 odds today"],
+  ["/banker-of-the-day", "Banker of the day"], ["/sure-odds-today", "Sure odds today?"], ["/gg-ng", "GG/NG"],
+  ["/over-1-5", "Over 1.5"], ["/over-under-2-5", "Over 2.5"], ["/double-chance", "Double chance"], ["/correct-score", "Correct score"],
+];
+---
+<Base title="Football predictions today, with every result on the record | Engrebodds"
+      description="Free football predictions for today: model probabilities, banker of the day, 2, 5 and 10 odds slips. Every tip is graded after full time, wins and losses.">
+  <div class="stack">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">{watLong(day.window.start)} · {day.fixtures.length} fixtures covered</span>
+        <h1>Football predictions with every result on the record</h1>
+        <p class="lede">Model probabilities for every match we cover, a daily banker, 2, 5 and 10 odds slips, and an accumulator builder. Every tip is graded after full time, wins and losses.</p>
+        <div class="chips">{chips.map(([href, label]) => <a class="chip" href={href}>{label}</a>)}</div>
+      </div>
+      <BankerCard fixture={b.fixture} tip={b.tip} />
+    </section>
+
+    <section>
+      <div class="sec-head"><div><span class="eyebrow">Free for everyone</span><h2>Free tips for today</h2></div><a href="/predictions">All predictions →</a></div>
+      <Ledger day={day} fixtures={free} empty="Today's free tips are published at 07:45 WAT: all four tips on three matches." />
+    </section>
+
+    <section>
+      <div class="sec-head"><div><span class="eyebrow">Graded after full time · 1 unit per tip</span><h2>Public track record</h2></div><a href="/track-record">Full record →</a></div>
+      <StatsRow s={overall(record)} />
+    </section>
+
+    <section>
+      <div class="sec-head"><div><span class="eyebrow">Members · opens Aug 2027</span><h2>Premium plans</h2></div><a href="/pricing">Compare plans →</a></div>
+      <Plans />
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Tips by bookmaker</h2></div>
+      <div class="chips">{BOOKMAKERS.map((bk) => <a class="chip" href={`/bookmakers/${bk.slug}`}>{bk.name} tips</a>)}</div>
+    </section>
+  </div>
+</Base>
