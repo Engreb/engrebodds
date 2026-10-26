@@ -29,6 +29,8 @@ export default defineConfig({
       SUPABASE_URL: envField.string({ context: "server", access: "public" }),
       SUPABASE_KEY: envField.string({ context: "server", access: "public" }),
       SITE_PREVIEW: envField.boolean({ context: "server", access: "public", default: false }),
+      // "off" until launch: noindex everywhere and a robots.txt that blocks all crawlers (deploy checklist).
+      SITE_INDEXING: envField.enum({ context: "server", access: "public", values: ["on", "off"], default: "off" }),
       SUPABASE_SERVICE_KEY: envField.string({ context: "server", access: "secret", optional: true }),
     },
   },

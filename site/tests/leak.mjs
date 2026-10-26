@@ -38,6 +38,8 @@ const PAGES = ["/", "/predictions", "/banker-of-the-day", "/2-odds-today", "/5-o
   "/leagues/nigeria-test-premier-league", "/track-record", "/pricing", "/sign-up", "/responsible-gambling",
   "/how-our-predictions-work", "/about", "/privacy", "/terms", "/bookmakers/sportybet", "/bookmakers/1xbet", A, B, C];
 const FILES = ["/track-record.csv", "/track-record-slips.csv", "/sitemap.xml", "/robots.txt"];
+// Until launch nothing may be indexed (SITE_INDEXING=off in wrangler.jsonc).
+const INDEXING_OFF = true;
 
 const html = {};
 for (const p of [...PAGES, ...FILES]) {
@@ -77,6 +79,13 @@ check((member.res.headers.get("cache-control") ?? "").includes("no-store"), "ses
 check(!/public/.test(member.res.headers.get("cloudflare-cdn-cache-control") ?? ""), "session cookie: response cacheable by the CDN");
 const tracked = await get("/predictions?utm_source=wa");
 check(tracked.res.status === 301 && tracked.res.headers.get("location") === "/predictions", "unknown query parameter not dropped");
+
+// Nothing indexable before launch.
+if (INDEXING_OFF) {
+  check(/Disallow: \/\s*$/m.test(html["/robots.txt"]), "robots.txt doesn't block crawlers");
+  check(/noindex/.test(anon.res.headers.get("x-robots-tag") ?? ""), "no X-Robots-Tag noindex header");
+  check(html["/"].includes('<meta name="robots" content="noindex">'), "home page has no noindex meta tag");
+}
 
 // JavaScript weight on the home page.
 let js = 0;

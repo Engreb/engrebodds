@@ -9,7 +9,9 @@
   "vars": {
     // Public values: the anon/publishable key only reads what row-level security allows.
     "SUPABASE_URL": "https://xmgjrcgyuebsnvyvyqdx.supabase.co",
-    "SUPABASE_KEY": "sb_publishable_kmRxrwINDY_Bc5ZSewT-Qg_CLunn-GZ"
+    "SUPABASE_KEY": "sb_publishable_kmRxrwINDY_Bc5ZSewT-Qg_CLunn-GZ",
+    // Search engines: "off" until the public launch (noindex everywhere, robots.txt blocks all).
+    "SITE_INDEXING": "off"
   },
   "env": {
     // `astro dev --mode test` / `astro build --mode test`: the LOCAL Supabase (supabase start), seeded with
