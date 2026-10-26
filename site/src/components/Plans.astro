@@ -8,7 +8,7 @@ import { naira, PLANS } from "../lib/site";
       <h3>{p.name}</h3>
       <div><div class="price">{naira(p.ngn)}</div><div class="per">{p.days} · {p.per}</div></div>
       <ul><li>Every prediction before kick-off</li><li>Banker of the day</li><li>2, 5 and 10 odds slips</li><li>Full bet builder</li></ul>
-      <a class={`btn ${p.best ? "pri" : "sec"}`} href="/sign-up">Choose {p.name}</a>
+      <a class={`btn ${p.best ? "pri" : "sec"}`} href={`/sign-up?plan=${p.id}`}>Choose {p.name}</a>
     </div>
   ))}
 </div>

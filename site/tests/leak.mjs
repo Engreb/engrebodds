@@ -35,7 +35,7 @@ if (!A || !B || !C) {
 
 const PAGES = ["/", "/predictions", "/banker-of-the-day", "/2-odds-today", "/5-odds-today", "/10-odds-today", "/sure-odds-today",
   "/gg-ng", "/over-1-5", "/over-under-2-5", "/double-chance", "/correct-score", "/bet-builder", "/leagues",
-  "/leagues/nigeria-test-premier-league", "/track-record", "/pricing", "/sign-up", "/responsible-gambling",
+  "/leagues/nigeria-test-premier-league", "/track-record", "/pricing", "/sign-in", "/responsible-gambling",
   "/how-our-predictions-work", "/about", "/privacy", "/terms", "/bookmakers/sportybet", "/bookmakers/1xbet", A, B, C];
 const FILES = ["/track-record.csv", "/track-record-slips.csv", "/sitemap.xml", "/robots.txt"];
 // Until launch nothing may be indexed (SITE_INDEXING=off in wrangler.jsonc).
@@ -74,7 +74,7 @@ check(!/Preview\./.test(html["/"]), "production build shows the preview banner")
 // Edge-cache policy as served.
 const anon = await get("/predictions");
 check(/public/.test(anon.res.headers.get("cloudflare-cdn-cache-control") ?? ""), "anonymous page: no public CDN cache header");
-const member = await get("/predictions", { headers: { cookie: "eo_session=x" } });
+const member = await get("/predictions", { headers: { cookie: "sb-127-auth-token=base64-x" } });
 check((member.res.headers.get("cache-control") ?? "").includes("no-store"), "session cookie: response not private");
 check(!/public/.test(member.res.headers.get("cloudflare-cdn-cache-control") ?? ""), "session cookie: response cacheable by the CDN");
 const tracked = await get("/predictions?utm_source=wa");

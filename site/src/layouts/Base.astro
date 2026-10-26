@@ -61,7 +61,7 @@ const nav = [
       <nav class="main" aria-label="Main">
         {nav.map(([href, label]) => <a href={href} class={path === href ? "on" : undefined}>{label}</a>)}
       </nav>
-      <a class="join-btn" href="/pricing">Go Premium</a>
+      {Astro.locals.user ? <a class="join-btn" href="/account">Account</a> : <a class="join-btn" href="/pricing">Go Premium</a>}
     </div></header>
 
     <main class="wrap"><slot /></main>

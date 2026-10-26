@@ -13,5 +13,5 @@ export async function getDay(Astro: AstroGlobal, date?: string): Promise<Day> {
     const { loadPreviewDay } = await import("./preview");
     return loadPreviewDay(date, Astro.cookies.get(PREVIEW_MEMBER_COOKIE)?.value === "1");
   }
-  return loadDay(date);
+  return loadDay(date, Astro.locals.supabase, Astro.locals.user != null);
 }

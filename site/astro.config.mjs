@@ -30,6 +30,10 @@ export default defineConfig({
       SUPABASE_KEY: envField.string({ context: "server", access: "public" }),
       SITE_PREVIEW: envField.boolean({ context: "server", access: "public", default: false }),
       // "off" until launch: noindex everywhere and a robots.txt that blocks all crawlers (deploy checklist).
+      // Accounts and payments: "off" (placeholders), "test" (Paystack test mode), later "live" (separate approval).
+      PAYMENTS: envField.enum({ context: "server", access: "public", values: ["off", "test", "live"], default: "off" }),
+      // Public Turnstile site key for sign-in (the secret is in Supabase Auth's captcha settings).
+      TURNSTILE_SITE_KEY: envField.string({ context: "server", access: "public", default: "" }),
       SITE_INDEXING: envField.enum({ context: "server", access: "public", values: ["on", "off"], default: "off" }),
       SUPABASE_SERVICE_KEY: envField.string({ context: "server", access: "secret", optional: true }),
     },

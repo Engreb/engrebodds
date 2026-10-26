@@ -13,17 +13,26 @@ export function publicClient(): SupabaseClient {
   return anon;
 }
 
-/** Everything a page needs for one publishing day, as an anonymous visitor sees it. */
-export async function loadDay(date?: string, now = new Date()): Promise<Day> {
+/**
+ * Everything a page needs for one publishing day, as this visitor may see it. `db` is the request's client:
+ * the public one, or a signed-in visitor's own session, in which case RLS shows Premium to members only.
+ */
+export async function loadDay(date?: string, db: SupabaseClient = publicClient(), signedIn = false, now = new Date()): Promise<Day> {
   const today = publishingWindow(now).date;
   const w = windowFor(date ?? today);
-  const db = publicClient();
-  const [fixtures, tips, predictions] = await Promise.all([coveredFixtures(db, w), visibleTips(db, w), visiblePredictions(db, w)]);
+  const [fixtures, tips, predictions, member] = await Promise.all([
+    coveredFixtures(db, w), visibleTips(db, w), visiblePredictions(db, w), signedIn ? isPremium(db) : false]);
   const fixtureMap = new Map(fixtures.map((f) => [f.id, f]));
   const slips = await daySlips(db, w, new Map(tips.map((t) => [t.id, t])), fixtureMap);
   return {
     window: w, today, fixtures, tips: groupTips(tips),
-    predictions: new Map(predictions.map((p) => [p.fixtureId, p])), slips, preview: false, member: false,
+    predictions: new Map(predictions.map((p) => [p.fixtureId, p])), slips, preview: false, member,
   };
+}
+
+export async function isPremium(db: SupabaseClient): Promise<boolean> {
+  const { data, error } = await db.rpc("is_premium");
+  if (error) throw new Error(`is_premium: ${error.message}`);
+  return data === true;
 }
 

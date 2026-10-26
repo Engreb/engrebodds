@@ -36,6 +36,7 @@ on:
     - cron: "57 5,17 * * *"       # predictions for the next 48 hours
     - cron: "29 7 * * 1"          # shadow evaluation of frozen predictions
     - cron: "45 6,14 * * *"       # publish (or preview, while PUBLISH_TIPS is off) the publishing day's tips
+    - cron: "11 3 * * *"          # payments: settle or abandon pending payments older than 24h (Phase 5)
   workflow_dispatch:
     inputs:
       jobs:
@@ -52,7 +53,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Daily payment reconcile (supabase/functions/pay-reconcile). Skipped until RECONCILE_TOKEN is set.
+  reconcile:
+    if: github.event.schedule == '11 3 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RECONCILE_TOKEN: ${{ secrets.RECONCILE_TOKEN }}
+    steps:
+      - name: Reconcile pending payments
+        run: |
+          if [ -z "$RECONCILE_TOKEN" ]; then echo "RECONCILE_TOKEN not set: payments not configured, nothing to do"; exit 0; fi
+          curl -sS --fail-with-body -X POST -H "x-reconcile-token: $RECONCILE_TOKEN"             https://xmgjrcgyuebsnvyvyqdx.supabase.co/functions/v1/pay-reconcile
+
   ingest:
+    if: github.event.schedule != '11 3 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 120 || 20 }}   # tune_live can be long
     env:

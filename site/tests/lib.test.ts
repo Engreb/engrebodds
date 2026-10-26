@@ -65,11 +65,14 @@ describe("cache policy", () => {
     expect(decide(req("/predictions?league=england-premier-league")).kind).toBe("cache");
   });
   it("never caches members, authorised requests, posts or previews", () => {
-    expect(decide(req("/", { headers: { cookie: "a=1; eo_session=xyz" } })).kind).toBe("private");
+    expect(decide(req("/", { headers: { cookie: "a=1; sb-xmgjrcgyuebsnvyvyqdx-auth-token=base64-x" } })).kind).toBe("private");
+    expect(decide(req("/", { headers: { cookie: "sb-127-auth-token.0=a; sb-127-auth-token.1=b" } })).kind).toBe("private");
     expect(decide(req("/", { headers: { authorization: "Bearer t" } })).kind).toBe("private");
     expect(decide(req("/", { method: "POST" })).kind).toBe("private");
     expect(decide(req("/"), { preview: true }).kind).toBe("private");
-    expect(hasSession("eo_sessionx=1")).toBe(false);
+    expect(hasSession("sb-x-auth-token-code-verifier=1; theme=dark")).toBe(false);
+    expect(decide(req("/sign-up?plan=monthly")).kind).toBe("private");
+    expect(decide(req("/account?reference=eo_1&trxref=eo_1")).kind).toBe("private");
   });
   it("drops query parameters outside the allowlist, so they can't split the cache", () => {
     expect(decide(req("/predictions?utm_source=wa&league=x"))).toEqual({ kind: "redirect", location: "/predictions?league=x" });

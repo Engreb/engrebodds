@@ -23,7 +23,9 @@
         "--prefix",
         "site",
         "run",
-        "dev:test"
+        "dev:test",
+        "--",
+        "--host"
       ],
       "port": 4322
     }

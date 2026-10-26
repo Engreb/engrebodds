@@ -11,7 +11,10 @@
     "SUPABASE_URL": "https://xmgjrcgyuebsnvyvyqdx.supabase.co",
     "SUPABASE_KEY": "sb_publishable_kmRxrwINDY_Bc5ZSewT-Qg_CLunn-GZ",
     // Search engines: "off" until the public launch (noindex everywhere, robots.txt blocks all).
-    "SITE_INDEXING": "off"
+    "SITE_INDEXING": "off",
+    // Accounts and payments: "off" until switched on for the private deploy (docs/phase-5-plan.md).
+    "PAYMENTS": "off",
+    "TURNSTILE_SITE_KEY": ""
   },
   "env": {
     // `astro dev --mode test` / `astro build --mode test`: the LOCAL Supabase (supabase start), seeded with
@@ -19,7 +22,11 @@
     "test": {
       "vars": {
         "SUPABASE_URL": "http://127.0.0.1:54321",
-        "SUPABASE_KEY": "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+        "SUPABASE_KEY": "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH",
+        "SITE_INDEXING": "off",
+        "PAYMENTS": "test",
+        // Cloudflare's published always-pass test site key (pairs with the test secret in supabase/config.toml).
+        "TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
       }
     }
   }

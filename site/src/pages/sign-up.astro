@@ -1,17 +1,74 @@
 ---
-// Placeholder until Phase 5 (accounts and Paystack). No form, and no personal data collected.
+// Choose a plan, confirm 18+, pay (Paystack checkout). Off until PAYMENTS is switched on; never offered when
+// the site's PAYMENTS and the database's payments_mode disagree.
 import Base from "../layouts/Base.astro";
+import { PAYMENTS } from "astro:env/server";
+import { invoke, modeReady } from "../lib/payments";
+import { naira, PLANS } from "../lib/site";
+
+const user = Astro.locals.user;
+const chosen = PLANS.find((p) => p.id === Astro.url.searchParams.get("plan"))?.id ?? "monthly";
+if (PAYMENTS !== "off" && !user) return Astro.redirect(`/sign-in?next=${encodeURIComponent(`/sign-up?plan=${chosen}`)}`);
+
+const db = Astro.locals.supabase;
+const ready = user ? await modeReady(db) : false;
+let error = "";
+if (user && ready && Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const plan = String(form.get("plan") ?? "");
+  if (form.get("adult") === "yes") {
+    const { error: e } = await db.from("profiles").insert({ user_id: user.id, adult_confirmed_at: new Date().toISOString() });
+    if (e && e.code !== "23505") error = "We couldn't save your age confirmation. Please try again.";
+  }
+  if (!error) {
+    const r = await invoke<{ url: string }>(db, "pay-start", { plan, siteMode: PAYMENTS });
+    if (r.data?.url) return Astro.redirect(r.data.url, 303);
+    error = r.error === "confirm you are 18 or older first" ? "Please confirm you are 18 or older." : r.error ?? "Checkout didn't start.";
+  }
+}
+const profile = user && ready ? (await db.from("profiles").select("adult_confirmed_at").maybeSingle()).data : null;
 ---
-<Base title="Sign up" description="Engrebodds accounts and Premium open in August 2027. Until then, every tip is free to check on the public track record." noindex>
+<Base title="Choose a plan" description="Engrebodds Premium plans: pay in naira, no auto-renewal." noindex>
   <div class="stack" style="max-width:68ch">
-    <div>
-      <h1>Accounts open in August 2027</h1>
-      <p class="lede">There is nothing to sign up for yet, and we don't collect any of your details. Until Premium opens, we're proving the tips in public: every pick is graded after full time and stays on the record.</p>
-    </div>
-    <div class="row">
-      <a class="btn pri" href="/track-record">See the track record</a>
-      <a class="btn sec" href="/predictions">Today's free tips</a>
-    </div>
-    <p class="note">When accounts open you'll need to confirm you are 18 or older. Payments will run through a Nigerian payment provider, in naira, with no auto-renewal.</p>
+    {PAYMENTS === "off" ? (
+      <>
+        <div>
+          <h1>Accounts open in August 2027</h1>
+          <p class="lede">There is nothing to sign up for yet, and we don't collect any of your details. Until Premium opens, we're proving the tips in public: every pick is graded after full time and stays on the record.</p>
+        </div>
+        <div class="row"><a class="btn pri" href="/track-record">See the track record</a><a class="btn sec" href="/predictions">Today's free tips</a></div>
+      </>
+    ) : !ready ? (
+      <div>
+        <h1>Payments are temporarily unavailable</h1>
+        <p class="lede">We can't take payments right now. Nothing has been charged. Please try again later.</p>
+      </div>
+    ) : (
+      <>
+        {PAYMENTS === "test" && <p class="draft"><strong>Test mode.</strong> Checkout uses Paystack's test system: no real money moves.</p>}
+        <div>
+          <h1>Choose your plan</h1>
+          <p class="lede">Pay in naira by card, bank transfer or USSD. No auto-renewal: Premium simply ends when your plan does. Buying again while you have Premium adds the new days after your current plan.</p>
+        </div>
+        {error && <p class="draft" role="alert">{error}</p>}
+        <form method="post" class="stack" style="gap:14px">
+          <div class="plans">
+            {PLANS.map((p) => (
+              <label class={`plan${p.id === chosen ? " best" : ""}`} style="cursor:pointer">
+                <span class="row"><input type="radio" name="plan" value={p.id} checked={p.id === chosen} required /><h3>{p.name}</h3></span>
+                <div><div class="price">{naira(p.ngn)}</div><div class="per">{p.days} · {p.per}</div></div>
+              </label>
+            ))}
+          </div>
+          {!profile && (
+            <label style="display:flex;gap:8px;align-items:flex-start">
+              <input type="checkbox" name="adult" value="yes" required /> I confirm I am 18 or older
+            </label>
+          )}
+          <div><button class="btn pri" type="submit">Continue to payment</button></div>
+          <p class="note" style="margin:0">You'll pay on Paystack's secure page and come back here. Card details never reach Engrebodds.</p>
+        </form>
+      </>
+    )}
   </div>
 </Base>

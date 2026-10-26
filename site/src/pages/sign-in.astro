@@ -1,0 +1,80 @@
+---
+// Sign in with a 6-digit code by email (no passwords). The code request needs a Turnstile token, which
+// Supabase Auth checks itself; Auth also rate-limits code requests and attempts.
+import Base from "../layouts/Base.astro";
+import { PAYMENTS, TURNSTILE_SITE_KEY } from "astro:env/server";
+import { requestClient, safeNext } from "../lib/auth";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+// ?reauth=1: a signed-in user must sign in again (e.g. before deleting the account).
+const reauth = Astro.url.searchParams.get("reauth") === "1";
+if (Astro.locals.user && !reauth) return Astro.redirect(next);
+
+let step: "email" | "code" = "email";
+let email = reauth ? (Astro.locals.user?.email ?? "") : "";
+let error = "";
+if (PAYMENTS !== "off" && Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  email = String(form.get("email") ?? "").trim().toLowerCase();
+  const client = requestClient(Astro);
+  if (form.get("step") === "code") {
+    const token = String(form.get("code") ?? "").replace(/\D/g, "");
+    const { error: e } = await client.auth.verifyOtp({ email, token, type: "email" });
+    if (!e) return Astro.redirect(safeNext(String(form.get("next") ?? "")));
+    step = "code";
+    error = e.status === 429 ? "Too many attempts. Wait a few minutes, then try again."
+                             : "That code didn't work. Check it, or ask for a new one.";
+  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    error = "Enter a valid email address.";
+  } else {
+    const { error: e } = await client.auth.signInWithOtp({
+      email, options: { shouldCreateUser: true, captchaToken: String(form.get("cf-turnstile-response") ?? "") },
+    });
+    if (e) error = e.status === 429 ? "Too many code requests. Wait a few minutes, then try again."
+                                    : "We couldn't send a code just now. Please try again.";
+    else step = "code";
+  }
+}
+---
+<Base title="Sign in" description="Sign in to Engrebodds with a code sent to your email." noindex>
+  <div class="stack" style="max-width:440px">
+    {PAYMENTS === "off" ? (
+      <div>
+        <h1>Accounts open in August 2027</h1>
+        <p class="lede">There is nothing to sign in to yet. Every tip is free to check on the <a href="/track-record">track record</a>.</p>
+      </div>
+    ) : (
+      <>
+        <div>
+          <h1>Sign in</h1>
+          <p class="lede">{step === "email" && reauth
+            ? "For your safety, sign in again before deleting your account."
+            : step === "email"
+            ? "We'll email you a 6-digit code. No password needed; new here? The same code creates your account."
+            : `We've sent a 6-digit code to ${email}. It expires in one hour.`}</p>
+        </div>
+        {error && <p class="draft" role="alert">{error}</p>}
+        {step === "email" ? (
+          <form class="join" method="post" action={`/sign-in?${reauth ? "reauth=1&" : ""}next=${encodeURIComponent(next)}`}>
+            <input type="hidden" name="step" value="email" />
+            <label for="email">Email<input class="field" id="email" name="email" type="email" autocomplete="email" required value={email} /></label>
+            <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-theme="auto"></div>
+            <button class="btn pri" type="submit">Email me a code</button>
+          </form>
+        ) : (
+          <form class="join" method="post" action={`/sign-in?${reauth ? "reauth=1&" : ""}next=${encodeURIComponent(next)}`}>
+            <input type="hidden" name="step" value="code" />
+            <input type="hidden" name="email" value={email} />
+            <input type="hidden" name="next" value={next} />
+            <label for="code">6-digit code<input class="field" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+              pattern="[0-9 ]{6,7}" maxlength="7" required autofocus /></label>
+            <button class="btn pri" type="submit">Sign in</button>
+            <a href={`/sign-in?${reauth ? "reauth=1&" : ""}next=${encodeURIComponent(next)}`}>Use a different email, or get a new code</a>
+          </form>
+        )}
+        <p class="note">You must be 18 or older. We only use your email to sign you in and for your Premium account; see our <a href="/privacy">privacy policy</a>.</p>
+      </>
+    )}
+  </div>
+</Base>
+{PAYMENTS !== "off" && step === "email" && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}

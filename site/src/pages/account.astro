@@ -1,0 +1,117 @@
+---
+// The member's own page: Premium status, payments, the 18+ confirmation, return from checkout,
+// sign out and account deletion.
+import Base from "../layouts/Base.astro";
+import { PAYMENTS } from "astro:env/server";
+import { watDate, watLong } from "../lib/day";
+import { invoke } from "../lib/payments";
+import { naira } from "../lib/site";
+
+const user = Astro.locals.user;
+if (PAYMENTS === "off") return Astro.redirect("/sign-in");
+if (!user) return Astro.redirect(`/sign-in?next=${encodeURIComponent("/account")}`);
+const db = Astro.locals.supabase;
+
+let notice = "";
+let deleteError = "";
+// Back from Paystack (?reference=…): settle now instead of waiting for the webhook.
+const reference = Astro.url.searchParams.get("reference");
+if (reference && Astro.request.method === "GET") {
+  const r = await invoke<{ status: string }>(db, "pay-verify", { reference });
+  notice = r.data?.status === "success" ? "Payment received: Premium is on."
+    : r.data?.status === "needs_review" ? "Your payment is being checked. We'll sort it out and email you."
+    : "We haven't received your payment yet. If you paid, it will show here shortly.";
+}
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  if (form.get("action") === "adult" && form.get("adult") === "yes") {
+    const { error } = await db.from("profiles").insert({ user_id: user.id, adult_confirmed_at: new Date().toISOString() });
+    notice = error && error.code !== "23505" ? "We couldn't save that. Please try again." : "Thanks, that's confirmed.";
+  }
+  if (form.get("action") === "delete" && form.get("understood") === "yes") {
+    const r = await invoke<{ deleted: boolean }>(db, "delete-account");
+    if (r.data?.deleted) {
+      await db.auth.signOut({ scope: "local" });
+      return Astro.redirect("/account/deleted", 303);
+    }
+    if (r.status === 403) return Astro.redirect(`/sign-in?reauth=1&next=${encodeURIComponent("/account#delete")}`, 303);
+    deleteError = r.status === 409 ? "You have a payment in progress. Finish it, or wait for it to expire (24 hours), then try again."
+                                   : r.error ?? "We couldn't delete your account. Please try again.";
+  }
+}
+
+const [profile, memberships, payments, mode] = await Promise.all([
+  db.from("profiles").select("adult_confirmed_at").maybeSingle(),
+  db.from("memberships").select("starts_at, ends_at, mode, revoked_at").order("starts_at", { ascending: false }),
+  db.from("payments").select("reference, plan_id, status, expected_amount_kobo, mode, created_at, paid_at").order("created_at", { ascending: false }),
+  db.rpc("payments_mode"),
+]);
+const now = Date.now();
+const current = (memberships.data ?? []).filter((m) => !m.revoked_at && m.mode === mode.data && Date.parse(m.ends_at) > now);
+const activeUntil = current.length ? current.reduce((a, m) => (m.ends_at > a ? m.ends_at : a), current[0].ends_at) : null;
+const premiumNow = current.some((m) => Date.parse(m.starts_at) <= now);
+const STATUS: Record<string, string> = { pending: "Waiting for payment", success: "Paid", failed: "Failed", abandoned: "Not completed",
+  needs_review: "Being checked" };
+---
+<Base title="Your account" description="Your Engrebodds account." noindex>
+  <div class="stack" style="max-width:68ch">
+    {PAYMENTS === "test" && <p class="draft"><strong>Test mode.</strong> Payments here use Paystack's test system: no real money moves.</p>}
+    <div>
+      <h1>Your account</h1>
+      <p class="lede">Signed in as {user.email}.</p>
+    </div>
+    {notice && <p class="note" role="status">{notice}</p>}
+
+    <section class="stack" style="gap:10px">
+      <h2>Premium</h2>
+      {premiumNow && activeUntil ? (
+        <p style="margin:0">Active until <strong>{watLong(activeUntil)}</strong>. It ends then by itself: there is no auto-renewal.</p>
+      ) : activeUntil ? (
+        <p style="margin:0">Your plan starts soon and runs until {watLong(activeUntil)}.</p>
+      ) : (
+        <p style="margin:0">You don't have Premium. <a href="/pricing">See plans</a>.</p>
+      )}
+    </section>
+
+    {!profile.data && (
+      <section class="stack" style="gap:10px">
+        <h2>Confirm your age</h2>
+        <form method="post" class="join">
+          <input type="hidden" name="action" value="adult" />
+          <label style="flex-direction:row;align-items:flex-start;gap:8px;font-weight:500">
+            <input type="checkbox" name="adult" value="yes" required /> I confirm I am 18 or older
+          </label>
+          <button class="btn sec" type="submit">Confirm</button>
+        </form>
+      </section>
+    )}
+
+    <section class="stack" style="gap:10px">
+      <h2>Payments</h2>
+      {(payments.data ?? []).length === 0 ? <p style="margin:0" class="muted">No payments yet.</p> : (
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Date</th><th>Plan</th><th class="n">Amount</th><th>Status</th></tr></thead>
+          <tbody>{(payments.data ?? []).map((p) => (
+            <tr><td>{watDate(p.created_at)}</td><td>{p.plan_id}{p.mode === "test" ? " (test)" : ""}</td>
+              <td class="n">{naira(p.expected_amount_kobo / 100)}</td><td>{STATUS[p.status] ?? p.status}</td></tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </section>
+
+    <form method="post" action="/sign-out"><button class="btn sec" type="submit">Sign out</button></form>
+
+    <section class="stack" style="gap:10px" id="delete">
+      <h2>Delete your account</h2>
+      <p style="margin:0">This removes your sign-in and your 18+ confirmation. Any Premium days left are lost, with no refund. Payment records are kept without your name for accounting, as our <a href="/privacy">privacy policy</a> explains. For your safety, you must have signed in within the last 10 minutes.</p>
+      {deleteError && <p class="draft" role="alert">{deleteError}</p>}
+      <form method="post" class="join">
+        <input type="hidden" name="action" value="delete" />
+        <label style="flex-direction:row;align-items:flex-start;gap:8px;font-weight:500">
+          <input type="checkbox" name="understood" value="yes" required /> I understand my account and any remaining Premium are deleted
+        </label>
+        <button class="btn sec" type="submit">Delete my account</button>
+      </form>
+    </section>
+  </div>
+</Base>

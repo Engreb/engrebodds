@@ -41,6 +41,21 @@ jobs:
       - name: Model tests
         run: pytest -q model
 
+  # Edge Functions (payments): Deno type check and unit tests with a fake database and a fake Paystack.
+  functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.6
+      - run: deno check */index.ts
+      - run: deno test _shared/
+
   # The website: type check, unit tests, the preview-mode build guard, then the leak test against a production
   # build reading a seeded local Supabase (API included, so the site reads through row-level security as visitors do).
   site:
@@ -70,9 +85,11 @@ jobs:
         with:
           version: 2.121.0
 
-      - name: Start Supabase (database and API only)
+      - name: Start Supabase (database, API and Auth)
         working-directory: .
-        run: supabase start -x gotrue,realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+        run: |
+          supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          echo "LEAK_SERVICE_KEY=$(supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"$/\1/p')" >> "$GITHUB_ENV"
 
       # The seed needs room in today's publishing window for a match an hour ahead: not 05:25-06:45 UTC.
       - name: Seed test data
@@ -98,3 +115,4 @@ jobs:
           npm run preview -- --mode test --port 4323 > preview.log 2>&1 &
           for i in $(seq 30); do curl -sf -o /dev/null http://localhost:4323/predictions && break; sleep 2; done
           npm run test:leak || { cat preview.log; exit 1; }
+          node tests/members.mjs || { cat preview.log; exit 1; }
