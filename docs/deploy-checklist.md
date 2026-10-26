@@ -2,6 +2,13 @@
 
 The site runs locally today. It goes public only when publishing is switched on (`PUBLISH_TIPS=on`), which waits on API-Football Pro, a clean shadow record and Emmanuel's approval of each league. Work through this list in order then.
 
+## 0. Private deploy (before launch)
+The site can run privately on Cloudflare's free `*.workers.dev` address, behind Cloudflare Access, so only approved emails can open it. While `SITE_INDEXING` is `"off"` in `site/wrangler.jsonc` (the default), every page is `noindex` and `robots.txt` blocks all crawlers. A deployed build never has preview mode, so it shows exactly what the public would see.
+- [ ] Create a free Cloudflare account. In `site/`, run `npx wrangler login`.
+- [ ] `npm run build`, then `npx wrangler deploy`. Note the `https://engrebodds.<subdomain>.workers.dev` address it prints.
+- [ ] Workers & Pages → engrebodds → Settings → Domains & Routes → workers.dev → **Enable Cloudflare Access**. Then, in Zero Trust → Access → Applications, edit its policy to **Include → Emails** with the addresses allowed in.
+- [ ] Open the address in a private window: it must ask for a login code before showing anything.
+
 ## 1. Before deploying
 - [ ] **Domain:** buy it (e.g. `engrebodds.com`), then set the same address in `site/astro.config.mjs` (`site`) and `site/public/robots.txt`.
 - [ ] **Contact:** set `CONTACT_EMAIL` in `site/src/lib/site.ts` (the About page shows a "coming soon" line until then).
@@ -47,4 +54,5 @@ Needed before the first live publish. Until it's set up, the publish and proof j
 - [ ] Enable each league with `model:league_tips <api_id> on` (it refuses leagues that fail the shadow gate).
 - [ ] Set the free-tip priority leagues with `model:league_priority <api_id> <n>`.
 - [ ] Set the repo variable `PUBLISH_TIPS=on`.
+- [ ] Set `SITE_INDEXING` to `"on"` in `site/wrangler.jsonc`, change the leak test's `INDEXING_OFF` to `false`, redeploy, and remove Cloudflare Access from the public domain.
 - [ ] Watch the first 06:45 UTC run: tips, slips and the proof hash.
