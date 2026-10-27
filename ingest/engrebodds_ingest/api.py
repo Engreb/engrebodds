@@ -23,7 +23,23 @@ class ApiError(Exception):
 
 
 class QuotaExhausted(Exception):
-    """The daily quota fell below the floor kept free for live jobs."""
+    """The daily quota fell below the floor kept free for live jobs (or the API says the day's limit is reached)."""
+
+
+class AccountError(Exception):
+    """API-Football refused the account itself (suspended, or an invalid key). Deliberately not an ApiError:
+    jobs catch ApiError per date or league and carry on, but an account error must stop the job at once and
+    fail the run loudly. On 25 Oct 2026 a suspension was logged as per-date notes under "ok" for two days."""
+
+    def __init__(self, endpoint: str, errors):
+        reason = "; ".join(f"{k}: {v}" for k, v in errors.items()) if isinstance(errors, dict) else str(errors)
+        super().__init__(f"API-Football refused the account ({endpoint}): {reason}")
+        self.errors = errors
+
+
+# Body error keys that concern the whole account, not one request.
+ACCOUNT_ERROR_KEYS = {"access", "token"}
+DAILY_LIMIT_KEY = "requests"
 
 
 def _retryable(exc: BaseException) -> bool:
@@ -101,9 +117,15 @@ class ApiFootball:
             raise ApiError(endpoint, {"rateLimit": "HTTP 429 Too Many Requests"})
         resp.raise_for_status()
         body = resp.json()
-        # "errors" is [] when fine, or a dict like {"plan": "..."} / {"token": "..."}.
-        if body.get("errors"):
-            raise ApiError(endpoint, body["errors"])
+        # "errors" is [] when fine, or a dict like {"plan": "..."} / {"token": "..."} / {"access": "..."}.
+        errors = body.get("errors")
+        if errors:
+            if isinstance(errors, dict) and ACCOUNT_ERROR_KEYS & errors.keys():
+                raise AccountError(endpoint, errors)
+            if isinstance(errors, dict) and DAILY_LIMIT_KEY in errors:
+                self.quota_remaining = 0
+                raise QuotaExhausted(f"API-Football daily limit reached: {errors[DAILY_LIMIT_KEY]}")
+            raise ApiError(endpoint, errors)
         return body
 
     def close(self) -> None:

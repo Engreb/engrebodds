@@ -119,3 +119,35 @@ def test_results_fallback_skips_dates_the_plan_refuses():
     batches = list(fetch_due(client(handler), due, notes))
     assert batches == [[{"fixture": {"id": 2}}]]          # the refused day is skipped, the allowed day kept
     assert any("2026-10-21: date refused" in n for n in notes)
+
+
+SUSPENDED = {"access": "Your account is suspended, check on https://dashboard.api-football.com."}
+
+
+def test_account_errors_are_not_api_errors():
+    from engrebodds_ingest.api import AccountError
+    for errors in (SUSPENDED, {"token": "Error/Missing application key."}):
+        api = client(lambda req, e=errors: httpx.Response(200, json={"errors": e}))
+        with pytest.raises(AccountError) as exc:
+            api.get("/fixtures")
+        assert not isinstance(exc.value, ApiError)            # per-item `except ApiError` can't swallow it
+        assert "refused the account" in str(exc.value)
+
+
+def test_daily_limit_stops_instead_of_burning_requests():
+    api = client(lambda req: httpx.Response(200, json={"errors": {"requests": "You have reached the request limit for the day"}}))
+    with pytest.raises(QuotaExhausted):
+        api.get("/fixtures")
+    assert api.quota_remaining == 0
+
+
+def test_suspended_account_fails_a_job_after_one_request():
+    """The 25 Oct 2026 case: the results fallback used to note each refused date and carry on."""
+    from datetime import date
+    from engrebodds_ingest.api import AccountError
+    from engrebodds_ingest.jobs.sync_results import fetch_due
+
+    api = client(lambda req: httpx.Response(200, json={"errors": SUSPENDED}))
+    with pytest.raises(AccountError):
+        list(fetch_due(api, [(1, date(2026, 10, 21)), (2, date(2026, 10, 23))], []))
+    assert api.requests_made == 1
